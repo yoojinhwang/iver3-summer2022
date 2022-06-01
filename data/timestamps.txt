@@ -1,0 +1,28 @@
+05/31/2022 5m increment test
+2nd move: 4:23:00
+3rd move: 4:26:12
+4th move: 4:29:36
+5th move: 4:33:30
+6th move: 4:44:25
+
+06/01/2022 hydrophone on boat
+tag78 on buoy: 09:02:00
+tag78 on buoy 2: 09:53:00
+
+06/01/2022 mission 2 start
+tag78 mission 2 start: 16:38:00
+
+06/01/2022 static test
+static test start: 10:23:00
+static test pos2: 10:28:00
+static test pos3: 10:32:00
+
+06/01/2022 5m manual increment test
+start (50m): 11:14:00
+1st move (100m): 11:19:50 - 11:22:00
+2nd move (150m): 11:29:30 - 11:31:04
+3rd move (200m): 11:36:00 - 11:37:50
+4th move (250m): 11:43:00 - 11:45:10
+5th move (300m): 11:49:00 - 11:51:10
+6th move (50m): 11:57:00 - 12:02:50
+end: 12:09:00

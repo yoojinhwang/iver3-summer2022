@@ -115,10 +115,16 @@ class Listening(HydrophoneState):
 
         line = self._hydrophone._readline()
         while len(line) != 0:
-            # print(line)
+            print(line)
 
             # Check whether a line is a detection line and if so, store it
-            contents = self._hydrophone._parse_line(line)
+            try:
+                contents = self._hydrophone._parse_line(line)
+            except KeyboardInterrupt:
+                break
+            except Exception as err:
+                print(err)
+            
             if contents['type'] == 'output' and contents['info']['type'] == 'pinger':
                 detections.append(contents)
             
@@ -144,6 +150,8 @@ class Closed(HydrophoneState):
         if self._hydrophone._ser is not None:
             print('Closing serial port')
             self._hydrophone._ser.close()
+        if self._hydrophone._savefile is not None:
+            self._hydrophone._savefile.close()
 
     def run(self):
         pass
@@ -166,9 +174,9 @@ class Hydrophone:
     # _AVG_DT = 8.179
     _AVG_DT = 8.179071
 
-    _SPEED_OF_SOUND = 343  # m/s
+    _SPEED_OF_SOUND = 1460  # m/s
 
-    def __init__(self, com_port, serial_no, timeout=0):
+    def __init__(self, com_port, serial_no, timeout=0, savepath=None):
         '''Requires the com_port that the hydrophone is on and the hydrophone's serial number in order to begin talking to it'''
         self._serial_no = serial_no
         self._com_port = com_port
@@ -176,6 +184,13 @@ class Hydrophone:
         self._state = Idle(self)
         self._line_buffer = b''
         self._tags = {}
+        self._savepath = savepath
+
+        if self._savepath is not None:
+            self._savefile = open(self._savepath, 'w')
+            print('tag_id,datetime,total_dt,delta_tof,delta_distance,total_distance,signal_level', file=self._savefile)
+        else:
+            self._savefile = None
 
         # Attempt to open a serial port for the hydrophone. If this fails, switch to the closed state
         self._ser = None
@@ -257,7 +272,14 @@ class Hydrophone:
                     info_dict['noise_level'] = float(info[3])
                     info_dict['channel'] = int(info[4])
                 else:
-                    raise ValueError('I haven\'t implemented sensor tags sorry :(')
+                    info_dict['type'] = 'sensor'
+                    info_dict['code_space'] = info[0]
+                    info_dict['id'] = info[1]
+                    info_dict['sensor_adc'] = info[2]
+                    info_dict['signal_level'] = float(info[3])
+                    info_dict['noise_level'] = float(info[4])
+                    info_dict['channel'] = int(info[5])
+                    # raise ValueError('I haven\'t implemented sensor tags sorry :(')
 
             contents['info'] = info_dict
         return contents
@@ -324,7 +346,11 @@ class Hydrophone:
             # If the tag has not been encountered before, add it to the dictionary of tags
             if tag_id not in self._tags:
                 self._tags[tag_id] = {'first_detection_time': detection_time, 'last_detection_time': detection_time, 'first_time_of_flight': 0, 'time_of_flight': 0}
-                print('{}: dt=0, modded_time=0, tof=0, tof_0=0'.format(tag_id))
+                print('{}: total_dt={:.6f}, delta_tof={:.6f}, delta_distance={:.6f}, total_distance={:.6f}, signal_level={:.6f}'.format(tag_id, 0.0, 0.0, 0.0, 0.0, detection['info']['signal_level']))
+
+                # Save data if a savepath was given
+                if self._savefile is not None:
+                    print('{},{},{:.6f},{:.6f},{:.6f},{:.6f},{:.6f}'.format(tag_id, detection_time, 0.0, 0.0, 0.0, 0.0, detection['info']['signal_level']), file=self._savefile)
             
             # Otherwise, use the information from its first detection to calculate the time of flight
             else:
@@ -340,6 +366,10 @@ class Hydrophone:
                 total_distance = total_tof * Hydrophone._SPEED_OF_SOUND
                 # print('{}: total_dt={:.6f}, relative_tof={:.6f}, relative_distance={:.6f}, dt={:.6f}, delta_tof={:.6f}, delta_distance={:.6f} total_tof={:.6f}, total_distance={:.6f}'.format(tag_id, total_dt, relative_tof, relative_distance, dt, delta_tof, delta_distance, total_tof, total_distance))
                 print('{}: total_dt={:.6f}, delta_tof={:.6f}, delta_distance={:.6f}, total_distance={:.6f}, signal_level={:.6f}'.format(tag_id, total_dt, delta_tof, delta_distance, total_distance, detection['info']['signal_level']))
+
+                # Save data if a savepath was given
+                if self._savefile is not None:
+                    print('{},{},{:.6f},{:.6f},{:.6f},{:.6f},{:.6f}'.format(tag_id, detection_time, total_dt, delta_tof, delta_distance, total_distance, detection['info']['signal_level']), file=self._savefile)
 
                 self._tags[tag_id]['last_detection_time'] = detection_time
 
@@ -406,21 +436,3 @@ class Hydrophone:
     def is_closed(self):
         '''Check whether the hydrophone is currently closed'''
         return type(self._state) == Closed
-
-if __name__ == '__main__':
-    h1 = Hydrophone('COM3', 457049)
-    h1.start()
-    while h1.is_starting():
-        h1.run()
-        time.sleep(0.01)
-    while True:
-        try:
-            h1.run()
-            time.sleep(0.01)
-        except KeyboardInterrupt:
-            break
-    h1.stop()
-    while h1.is_stopping():
-        h1.run()
-        time.sleep(0.01)
-    h1.close()
