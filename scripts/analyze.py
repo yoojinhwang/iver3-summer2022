@@ -3,8 +3,14 @@ import numpy as np
 import matplotlib.pyplot as plt
 from datetime import datetime
 
-def regression(x, y):
+def fit_slope(x, y):
+    '''Fits a line with a y-intercept of 0, i.e. it fits a slope.'''
     return np.linalg.lstsq(x[:, np.newaxis], y, rcond=None)[0]
+
+def fit_line(x, y):
+    '''Fits a line, i.e. slope and y-intercept'''
+    A = np.vstack([x, np.ones(len(x))]).T
+    return np.linalg.lstsq(A, y, rcond=None)[0]
 
 def gaussian(x, mu=0, std=1):
     return 1/(std*np.sqrt(2*np.pi)) * np.exp(-0.5 * ((x-mu)/std)**2)
@@ -12,9 +18,10 @@ def gaussian(x, mu=0, std=1):
 def reject_outliers(data, m=2):
     return data[abs(data - np.mean(data)) < m * np.std(data)]
 
-data = pd.read_csv('../data/tag78_60m_long_beach_test_457049_0.csv')
+data = pd.read_csv('../data/06-01-2022/tag78_50m_increment_long_beach_test_457012_2.csv')
 distances = np.array(data['total_distance'])
 times = np.array(data['total_dt'])
+signal = np.array(data['signal_level'])
 dt = np.diff(times)
 n = np.round(dt / np.min(dt))
 
@@ -26,7 +33,7 @@ n = np.round(dt / np.min(dt))
 # plt.legend()
 # plt.show()
 
-plt.plot(times, distances, label='measured')
+plt.plot(times, distances, 'bo-', label='measured')
 plt.xlabel('Time (s)')
 plt.ylabel('Distance (m)')
 plt.show()
