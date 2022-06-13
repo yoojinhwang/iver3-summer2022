@@ -3,7 +3,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.transforms import Bbox
 import numpy as np
-from common import imerge, fit_line, find_files, avg_dt_dict, get_delta_tof
+from common import imerge, fit_line, find_files, avg_dt_dict, get_delta_tof, add_version, get_savepath, savefig
 
 def scrollable_legend(fig, legend):
     '''From https://stackoverflow.com/questions/55863590/adding-scroll-button-to-matlibplot-axes-legend'''
@@ -25,15 +25,17 @@ distances = []
 signals = []
 lengths = []
 sources = []
+datapaths = []
 
 # Define some information about the tags in case distances need to be calculated
-tag_id = 65477
+tag_id = 65478
 
 # Loop through the files found
 files = imerge(
+    find_files('../data/06-08-2022', name=r'.*increment.*457049_0'))
+    # find_files('../data/06-01-2022', name=r'.*manual.*'))
     # find_files('../data/05-26-2022', name=r'tag78.*', extension=r'\.csv'),
-    find_files('../data/06-01-2022', extension=r'\.csv'))
-    # find_files('../data/06-01-2022', name=r'.*manual.*', extension=r'\.csv'),
+    # find_files('../data/06-01-2022', extension=r'\.csv'))
     # find_files('../data/05-31-2022', '../data/05-27-2022', extension=r'\.csv'))
     # find_files('../../icex-lair-2021', name=r'data_[\d]+', extension=r'\.csv'))
 for i, dir_entry in enumerate(files):
@@ -42,7 +44,10 @@ for i, dir_entry in enumerate(files):
         data = pd.read_csv(dir_entry.path)
 
         # Retrieve distance measurements
-        if 'absolute_distance' in data.columns:
+        if 'gps_distance' in data.columns:
+            print('{}: using gps_distance'.format(source))
+            distance_subset = np.array(data['gps_distance'])
+        elif 'absolute_distance' in data.columns:
             print('{}: using absolute_distance'.format(source))
             distance_subset = np.array(data['absolute_distance'])
         elif 'Distance (m)' in data.columns:
@@ -76,6 +81,7 @@ for i, dir_entry in enumerate(files):
         signals += signal_subset.tolist()
         lengths.append(len(distance_subset))
         sources.append(source)
+        datapaths.append(dir_entry.path)
     except Exception as err:
         print(err)
 distances = np.array(distances)
@@ -90,9 +96,11 @@ ax.plot(distances, m * distances + b, label='m={:.6f}, b={:.6f}, R^2={:.6f}'.for
 
 # Plot the points for the csv and fit a line to them
 # cmap = plt.get_cmap('jet')
-for i, (length, acc, source) in enumerate(zip(lengths, np.cumsum(lengths), sources)):
+data = []
+for i, (length, acc, source, datapath) in enumerate(zip(lengths, np.cumsum(lengths), sources, datapaths)):
     distance_subset = distances[acc-length:acc]
     signal_subset = signals[acc-length:acc]
+    data.append((datapath, source, distance_subset, signal_subset))
     m, b = fit_line(distance_subset, signal_subset)
     r_sqr = np.corrcoef(distance_subset, signal_subset)[0][1] ** 2
     # color = cmap(float(i) / len(lengths))
@@ -118,4 +126,25 @@ ax.set_position([box.x0, box.y0, box.width * (1 - shrink_by), box.height])
 # Set the legend outside of the plot
 legend = ax.legend(loc='upper left', bbox_to_anchor=(1, 1))
 # scrollable_legend(fig, legend)
+fig = plt.gcf()
 plt.show()
+
+savepath = add_version('../plots/06-08-2022/signal_plot.png')
+print('Saving to {}'.format(savepath))
+savefig(fig, savepath)
+
+for datapath, source, distance_subset, signal_subset in data:
+    dt_distance = np.diff(distance_subset)
+    mask = np.array([True] + (dt_distance >= 0).tolist())
+    plt.scatter(distance_subset[mask], signal_subset[mask], label='Moving away {}'.format(np.sum(mask)))
+    plt.scatter(distance_subset[~mask], signal_subset[~mask], label='Moving towards {}'.format(np.sum(~mask)))
+    plt.xlabel('Distance (m)')
+    plt.ylabel('Signal level (dB)')
+    plt.title(source)
+    plt.legend()
+    fig = plt.gcf()
+    plt.show()
+
+    savepath = get_savepath(datapath, '_signal_direction')
+    print('Saving to {}'.format(savepath))
+    savefig(fig, savepath)

@@ -2,23 +2,20 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from datetime import datetime
+from common import fit_slope, fit_line, get_savepath, savefig
 
-def fit_slope(x, y):
-    '''Fits a line with a y-intercept of 0, i.e. it fits a slope.'''
-    return np.linalg.lstsq(x[:, np.newaxis], y, rcond=None)[0]
-
-def fit_line(x, y):
-    '''Fits a line, i.e. slope and y-intercept'''
-    A = np.vstack([x, np.ones(len(x))]).T
-    return np.linalg.lstsq(A, y, rcond=None)[0]
+replace = True
 
 def gaussian(x, mu=0, std=1):
+    '''PDF for a 1D gaussian'''
     return 1/(std*np.sqrt(2*np.pi)) * np.exp(-0.5 * ((x-mu)/std)**2)
 
 def reject_outliers(data, m=2):
+    '''Remove datapoints more than m standard deviations away from the mean'''
     return data[abs(data - np.mean(data)) < m * np.std(data)]
 
-data = pd.read_csv('../data/06-01-2022/tag78_50m_increment_long_beach_test_457012_2.csv')
+datapath = '../data/06-08-2022/tag78_cowling_none_long_beach_test_457012_0.csv'
+data = pd.read_csv(datapath)
 distances = np.array(data['total_distance'])
 times = np.array(data['total_dt'])
 signal = np.array(data['signal_level'])
@@ -33,10 +30,32 @@ n = np.round(dt / np.min(dt))
 # plt.legend()
 # plt.show()
 
-plt.plot(times, distances, 'bo-', label='measured')
+plt.plot(times, distances, label='TOF distance', marker='.')
+if 'absolute_distance' in data.columns:
+    plt.plot(times, data['absolute_distance'], label='Absolute TOF distance', marker='.')
+if 'gps_distance' in data.columns:
+    plt.plot(times, data['gps_distance'], label='GPS distance')
 plt.xlabel('Time (s)')
 plt.ylabel('Distance (m)')
+plt.legend()
+fig = plt.gcf()
 plt.show()
+
+savepath = get_savepath(datapath, '', replace=replace)
+print('Saving to {}'.format(savepath))
+savefig(fig, savepath)
+
+plt.plot(times, data['gps_speed'], label='GPS speed', marker='.')
+plt.plot(times, data['logged_speed'], label='Logged speed', marker='.')
+plt.legend()
+plt.xlabel('Time (s)')
+plt.ylabel('Speed (m/s)')
+fig = plt.gcf()
+plt.show()
+
+savepath = get_savepath(datapath, '_speeds', replace=replace)
+print('Saving to {}'.format(savepath))
+savefig(fig, savepath)
 
 # start_time = datetime.fromisoformat(data['datetime'][0])
 # move_0 = datetime.fromisoformat('2022-05-31 16:15:02')

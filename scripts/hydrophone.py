@@ -3,9 +3,10 @@ from datetime import datetime, timedelta
 from abc import ABC, abstractmethod
 import re
 import time
+import copy
 
 class HydrophoneState(ABC):
-    '''Abstract class representing a state that the hydrophone can be in at any given time'''
+    '''Abstract class representing a state that the hydrophone can be in'''
     def __init__(self, hydrophone):
         self._hydrophone = hydrophone
 
@@ -108,6 +109,7 @@ class Listening(HydrophoneState):
     '''Processes pinger detections'''
     def __init__(self, hydrophone):
         super().__init__(hydrophone)
+        self._hydrophone._ser.flush()
 
     def run(self):
         # Read all available lines and keep track of the detection lines
@@ -115,18 +117,15 @@ class Listening(HydrophoneState):
 
         line = self._hydrophone._readline()
         while len(line) != 0:
-            print(line)
-
             # Check whether a line is a detection line and if so, store it
             try:
                 contents = self._hydrophone._parse_line(line)
+                if contents['type'] == 'output' and contents['data']['type'] == 'pinger':
+                    detections.append(contents)
             except KeyboardInterrupt:
-                break
+                raise KeyboardInterrupt
             except Exception as err:
                 print(err)
-            
-            if contents['type'] == 'output' and contents['info']['type'] == 'pinger':
-                detections.append(contents)
             
             # Try to read another line
             line = self._hydrophone._readline()
@@ -144,14 +143,11 @@ class Stopping(CommandSequence):
 
 class Closed(HydrophoneState):
     '''Does nothing except close the serial communcation on init'''
-
     def __init__(self, hydrophone):
         super().__init__(hydrophone)
         if self._hydrophone._ser is not None:
             print('Closing serial port')
             self._hydrophone._ser.close()
-        if self._hydrophone._savefile is not None:
-            self._hydrophone._savefile.close()
 
     def run(self):
         pass
@@ -162,7 +158,7 @@ class Hydrophone:
     # Format string for datetime.now
     _TIME_FORMAT = '%Y-%m-%d %X'
 
-    # Exract infomration from response lines
+    # Exract information from response lines
     # https://regex101.com/r/Prf6OM/1
     _RESPONSE_REGEX = re.compile(r'^\*(\d{6})\.(0)#(\d{2})\[(\d{4})\],(?:(.*),)?(OK|FAILURE|INVALID),#([0-9A-F]{2})$')
 
@@ -170,27 +166,19 @@ class Hydrophone:
     # https://regex101.com/r/29xl6s/1
     _OUTPUT_REGEX = re.compile(r'^(\d{6}),(\d{3}),(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}),(.*),#([0-9A-F]{2})$')
 
-    # _AVG_DT = 8.17907142857143  # s
-    # _AVG_DT = 8.179
-    _AVG_DT = 8.179071
+    _AVG_DT_DICT = {65477: 8.179110, 65478: 8.179071, 65479: 7.958926}
 
     _SPEED_OF_SOUND = 1460  # m/s
 
-    def __init__(self, com_port, serial_no, timeout=0, savepath=None):
-        '''Requires the com_port that the hydrophone is on and the hydrophone's serial number in order to begin talking to it'''
-        self._serial_no = serial_no
+    def __init__(self, com_port, serial_no, timeout=0):
+        '''Requires the com port that the hydrophone is on and the hydrophone's serial number in order to begin talking to it'''
         self._com_port = com_port
+        self._serial_no = serial_no
         self._timeout = timeout
         self._state = Idle(self)
         self._line_buffer = b''
         self._tags = {}
-        self._savepath = savepath
-
-        if self._savepath is not None:
-            self._savefile = open(self._savepath, 'w')
-            print('tag_id,datetime,total_dt,delta_tof,delta_distance,total_distance,signal_level', file=self._savefile)
-        else:
-            self._savefile = None
+        self._detection_callback = None
 
         # Attempt to open a serial port for the hydrophone. If this fails, switch to the closed state
         self._ser = None
@@ -206,6 +194,30 @@ class Hydrophone:
             print('Unable to open port {}'.format(com_port))
             self._state = Closed(self)
     
+    def _readline(self):
+        '''Wrapper over serial.Serial.readline with some extra functionality to handle being called repeatedly in a while loop'''
+
+        # If no data is waiting to be read, return an empty string
+        if self._ser.in_waiting:
+            # Read a line from the serial port. Since this is being called in a loop repeatedly, the result of readline may not be
+            # an entire line. Only the first part of a line might be available. The result is appended to the hydrophone's read
+            # buffer for use when an entire line is ready.
+            partial_line = self._ser.readline()
+            self._line_buffer += partial_line
+
+            # Check if there is an entire line in the read buffer and if so, remove it from the buffer and return it
+            if b'\r\n' in partial_line:
+                line, rest = self._line_buffer.split(b'\r\n', maxsplit=1)
+                self._line_buffer = rest
+
+                # Sometimes the hydrophone sends trash data that can't be converted to a string?? If so, ignore it.
+                try:
+                    return line.decode('utf-8')
+                except UnicodeDecodeError as err:
+                    print('Discarding line: ', err)
+                    return ''
+        return ''
+
     def _parse_line(self, line):
         '''Extract the contents of a line sent by the hydrophone into a dictionary'''
         contents = {'raw': line}
@@ -237,51 +249,51 @@ class Hydrophone:
             contents['serial_no'] = int(groups[0])
             contents['sequence'] = int(groups[1])
             contents['datetime'] = datetime.fromisoformat(groups[2])
-            contents['info_raw'] = groups[3]
+            contents['data_raw'] = groups[3]
             contents['hex_sum'] = '0x' + groups[4]
 
-            # Create another dictionary for the information contained in the info fields to be added to the contents dictionary
-            info_dict = {}
+            # Create another dictionary for the information contained in the data fields to be added to the contents dictionary
+            data_dict = {}
 
-            # Remove key from key value pairs in info
-            info = contents['info_raw'].split(',')
-            for i, pair in enumerate(info):
+            # Remove key from key value pairs in data
+            data = contents['data_raw'].split(',')
+            for i, pair in enumerate(data):
                 values = pair.split('=')
                 if len(values) == 2:
-                    info[i] = values[1]
+                    data[i] = values[1]
             
             # If the first value is 'STS', the line is a status line. Otherwise, its a detection line.
-            if info[0] == 'STS':
-                info_dict['type'] = 'status'
-                info_dict['detection_count'] = int(info[1])
-                info_dict['ping_count'] = int(info[2])
-                info_dict['line_voltage'] = float(info[3])
-                info_dict['temperature'] = float(info[4])
-                info_dict['detection_memory'] = float(info[5])
-                info_dict['raw_memory'] = float(info[6])
-                info_dict['tilt'] = {['x', 'y', 'z'][i]: float(num) for i, num in enumerate(info[7].split(':'))}
-                info_dict['output_noise'] = info[8]
-                info_dict['output_ppm_noise'] = info[9]
+            if data[0] == 'STS':
+                data_dict['type'] = 'status'
+                data_dict['detection_count'] = int(data[1])
+                data_dict['ping_count'] = int(data[2])
+                data_dict['line_voltage'] = float(data[3])
+                data_dict['temperature'] = float(data[4])
+                data_dict['detection_memory'] = float(data[5])
+                data_dict['raw_memory'] = float(data[6])
+                data_dict['tilt'] = {['x', 'y', 'z'][i]: float(num) for i, num in enumerate(data[7].split(':'))}
+                data_dict['output_noise'] = data[8]
+                data_dict['output_ppm_noise'] = data[9]
             else:
                 # Pinger detections have 5 values, whereas sensor detections have 6
-                if len(info) == 5:
-                    info_dict['type'] = 'pinger'
-                    info_dict['code_space'] = info[0]
-                    info_dict['id'] = info[1]
-                    info_dict['signal_level'] = float(info[2])
-                    info_dict['noise_level'] = float(info[3])
-                    info_dict['channel'] = int(info[4])
+                if len(data) == 5:
+                    data_dict['type'] = 'pinger'
+                    data_dict['code_space'] = data[0]
+                    data_dict['id'] = int(data[1])
+                    data_dict['signal_level'] = float(data[2])
+                    data_dict['noise_level'] = float(data[3])
+                    data_dict['channel'] = int(data[4])
                 else:
-                    info_dict['type'] = 'sensor'
-                    info_dict['code_space'] = info[0]
-                    info_dict['id'] = info[1]
-                    info_dict['sensor_adc'] = info[2]
-                    info_dict['signal_level'] = float(info[3])
-                    info_dict['noise_level'] = float(info[4])
-                    info_dict['channel'] = int(info[5])
+                    data_dict['type'] = 'sensor'
+                    data_dict['code_space'] = data[0]
+                    data_dict['id'] = int(data[1])
+                    data_dict['sensor_adc'] = data[2]
+                    data_dict['signal_level'] = float(data[3])
+                    data_dict['noise_level'] = float(data[4])
+                    data_dict['channel'] = int(data[5])
                     # raise ValueError('I haven\'t implemented sensor tags sorry :(')
 
-            contents['info'] = info_dict
+            contents['data'] = data_dict
         return contents
     
     def _command_message(self, command):
@@ -309,30 +321,6 @@ class Hydrophone:
         self._ser.write(bytes(command_msg, 'utf-8'))
         return command_msg
     
-    def _readline(self):
-        '''Wrapper over serial.Serial.readline with some extra functionality to handle being called repeatedly in a while loop'''
-
-        # If no data is waiting to be read, return an empty string
-        if self._ser.in_waiting:
-            # Read a line from the serial port. Since this is being called in a loop repeatedly, the result of readline may not be
-            # an entire line. Only the first part of a line might be available. The result is appended to the hydrophone's read
-            # buffer for use when an entire line is ready.
-            partial_line = self._ser.readline()
-            self._line_buffer += partial_line
-
-            # Check if there is an entire line in the read buffer and if so, remove it from the buffer and return it
-            if b'\r\n' in partial_line:
-                line, rest = self._line_buffer.split(b'\r\n', maxsplit=1)
-                self._line_buffer = rest
-
-                # Sometimes the hydrophone sends trash data that can't be converted to a string?? If so, ignore it.
-                try:
-                    return line.decode('utf-8')
-                except UnicodeDecodeError as err:
-                    print('Discarding line: ', err)
-                    return ''
-        return ''
-
     def _set_time(self):
         '''Send a command to the hydrophone instructing it to set its clock to the current time'''
         return self._write_command('TIME={}'.format(datetime.now().strftime(Hydrophone._TIME_FORMAT)))
@@ -340,59 +328,55 @@ class Hydrophone:
     def _process_detections(self, detections):
         # Loop through detections and compute time of flight for each pinger found
         for detection in detections:
-            tag_id = detection['info']['id']
+            tag_id = detection['data']['id']
             detection_time = detection['datetime']
 
             # If the tag has not been encountered before, add it to the dictionary of tags
             if tag_id not in self._tags:
-                self._tags[tag_id] = {'first_detection_time': detection_time, 'last_detection_time': detection_time, 'first_time_of_flight': 0, 'time_of_flight': 0}
-                print('{}: total_dt={:.6f}, delta_tof={:.6f}, delta_distance={:.6f}, total_distance={:.6f}, signal_level={:.6f}'.format(tag_id, 0.0, 0.0, 0.0, 0.0, detection['info']['signal_level']))
+                self._tags[tag_id] = {
+                    'avg_dt': Hydrophone._AVG_DT_DICT.get(tag_id, 8.179071),
+                    'first_detection_time': detection_time,
+                    'previous_detection_time': detection_time,
+                    'current_detection_time': detection_time,
+                    'delta_time': 0,
+                    'delta_tof': 0,
+                    'delta_distance': 0,
+                    'accumulated_distance': 0
+                }
 
-                # Save data if a savepath was given
-                if self._savefile is not None:
-                    print('{},{},{:.6f},{:.6f},{:.6f},{:.6f},{:.6f}'.format(tag_id, detection_time, 0.0, 0.0, 0.0, 0.0, detection['info']['signal_level']), file=self._savefile)
-            
-            # Otherwise, use the information from its first detection to calculate the time of flight
+            # Otherwise, use the information from its last detection to calculate the time of flight
             else:
-                total_dt = (detection_time - self._tags[tag_id]['first_detection_time']).total_seconds()
-                relative_tof = (total_dt - Hydrophone._AVG_DT / 2) % Hydrophone._AVG_DT - Hydrophone._AVG_DT / 2
-                relative_distance = relative_tof * Hydrophone._SPEED_OF_SOUND
+                tag_info = self._tags[tag_id]
 
-                dt = (detection_time - self._tags[tag_id]['last_detection_time']).total_seconds()
-                delta_tof = (dt - Hydrophone._AVG_DT / 2) % Hydrophone._AVG_DT - Hydrophone._AVG_DT / 2
+                # Calculate information about the current detection
+                avg_dt = tag_info['avg_dt']
+                dt = (detection_time - self._tags[tag_id]['previous_detection_time']).total_seconds()
+                delta_tof = (dt - avg_dt / 2) % avg_dt - avg_dt / 2
                 delta_distance = delta_tof * Hydrophone._SPEED_OF_SOUND
-                self._tags[tag_id]['time_of_flight'] += delta_tof
-                total_tof = self._tags[tag_id]['time_of_flight']
-                total_distance = total_tof * Hydrophone._SPEED_OF_SOUND
-                # print('{}: total_dt={:.6f}, relative_tof={:.6f}, relative_distance={:.6f}, dt={:.6f}, delta_tof={:.6f}, delta_distance={:.6f} total_tof={:.6f}, total_distance={:.6f}'.format(tag_id, total_dt, relative_tof, relative_distance, dt, delta_tof, delta_distance, total_tof, total_distance))
-                print('{}: total_dt={:.6f}, delta_tof={:.6f}, delta_distance={:.6f}, total_distance={:.6f}, signal_level={:.6f}'.format(tag_id, total_dt, delta_tof, delta_distance, total_distance, detection['info']['signal_level']))
 
-                # Save data if a savepath was given
-                if self._savefile is not None:
-                    print('{},{},{:.6f},{:.6f},{:.6f},{:.6f},{:.6f}'.format(tag_id, detection_time, total_dt, delta_tof, delta_distance, total_distance, detection['info']['signal_level']), file=self._savefile)
+                # Update current tag information
+                tag_info['current_detection_time'] = detection_time
+                tag_info['delta_time'] = dt
+                tag_info['delta_tof'] = delta_tof
+                tag_info['delta_distance'] = delta_distance
+                tag_info['accumulated_distance'] += delta_distance
 
-                self._tags[tag_id]['last_detection_time'] = detection_time
+                # total_dt = (detection_time - self._tags[tag_id]['first_detection_time']).total_seconds()
+                # relative_tof = (total_dt - Hydrophone._AVG_DT / 2) % Hydrophone._AVG_DT - Hydrophone._AVG_DT / 2
+                # relative_distance = relative_tof * Hydrophone._SPEED_OF_SOUND
 
-                # tof_0 = self._tags[tag_id]['first_time_of_flight']
-                # dt = (detection_time - self._tags[tag_id]['first_detection_time']).total_seconds()
-                # modded_time = dt % Hydrophone._AVG_DT
+                # dt = (detection_time - self._tags[tag_id]['previous_detection_time']).total_seconds()
+                # delta_tof = (dt - Hydrophone._AVG_DT / 2) % Hydrophone._AVG_DT - Hydrophone._AVG_DT / 2
+                # delta_distance = delta_tof * Hydrophone._SPEED_OF_SOUND
+                # self._tags[tag_id]['time_of_flight'] += delta_tof
+                # total_tof = self._tags[tag_id]['time_of_flight']
+                # total_distance = total_tof * Hydrophone._SPEED_OF_SOUND
+                # self._tags[tag_id]['previous_detection_time'] = detection_time
 
-                # # We don't expect time of flights much larger than 2 seconds, so if we see one larger than half the average
-                # # timedelta, it is more likely that the time of flight of the original detection was greater than expected.
-                # if modded_time > Hydrophone._AVG_DT * 0.5:
-                #     # Update first time of flight
-                #     tof_0 = max(tof_0, Hydrophone._AVG_DT - modded_time)
-                #     self._tags[tag_id]['first_time_of_flight'] = tof_0
-                
-                # # Compute time of flight and record it
-                # time_of_flight = (dt + tof_0) % Hydrophone._AVG_DT
+            if callable(self._detection_callback):
+                self._detection_callback(detection, copy.deepcopy(self._tags[tag_id]))
 
-                # # Adjust for floating point errors
-                # if abs(time_of_flight - Hydrophone._AVG_DT) > 0.000001:
-                #     time_of_flight = 0.0
-
-                # self._tags[tag_id]['time_of_flight'] = time_of_flight
-                # print('{}: total_dt={}, total_tof={}, total_distance={}'.format(tag_id, dt, time_of_flight, time_of_flight * Hydrophone._SPEED_OF_SOUND))
+            self._tags[tag_id]['previous_detection_time'] = detection_time
 
     def run(self):
         '''Should be run in a loop without much delay between calls'''
@@ -400,8 +384,10 @@ class Hydrophone:
     
     def close(self):
         '''Close the serial connection. After this is called, the hydrophone object becomes unusable'''
-        self._state = Closed(self)
-        return True
+        if type(self._state) != Closed:
+            self._state = Closed(self)
+            return True
+        return False
     
     def start(self):
         '''Set the hydrophone to its start state. This means it will get ready to send the start sequence of commands'''
@@ -436,3 +422,9 @@ class Hydrophone:
     def is_closed(self):
         '''Check whether the hydrophone is currently closed'''
         return type(self._state) == Closed
+    
+    def get_tag_info(self):
+        return copy.deepcopy(self._tags)
+
+    def on_detection(self, callback):
+        self._detection_callback = callback
