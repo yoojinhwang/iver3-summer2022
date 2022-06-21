@@ -94,17 +94,17 @@ class GPS:
             partial_line = self._ser.readline()
             self._line_buffer += partial_line
 
-            # Check if there is an entire line in the read buffer and if so, remove it from the buffer and return it
-            if b'\r\n' in partial_line:
-                line, rest = self._line_buffer.split(b'\r\n', maxsplit=1)
-                self._line_buffer = rest
+        # Check if there is an entire line in the read buffer and if so, remove it from the buffer and return it
+        if b'\r\n' in partial_line:
+            line, rest = self._line_buffer.split(b'\r\n', maxsplit=1)
+            self._line_buffer = rest
 
-                # Sometimes the hydrophone sends trash data that can't be converted to a string?? If so, ignore it.
-                try:
-                    return line.decode('utf-8')
-                except UnicodeDecodeError as err:
-                    print('Discarding line: ', err)
-                    return ''
+            # Sometimes the hydrophone sends trash data that can't be converted to a string?? If so, ignore it.
+            try:
+                return line.decode('utf-8')
+            except UnicodeDecodeError as err:
+                print('Discarding line: ', err)
+                return ''
         return ''
 
     def _parse_line(self, line):

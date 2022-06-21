@@ -2,7 +2,8 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from datetime import datetime
-from common import fit_slope, fit_line, get_savepath, savefig
+import utils
+import os
 
 replace = True
 
@@ -14,7 +15,8 @@ def reject_outliers(data, m=2):
     '''Remove datapoints more than m standard deviations away from the mean'''
     return data[abs(data - np.mean(data)) < m * np.std(data)]
 
-datapath = '../data/06-08-2022/tag78_cowling_none_long_beach_test_457012_0.csv'
+datapath = '../data/06-08-2022/tag78_cowling_front_1_long_beach_test_457012_0.csv'
+name = os.path.splitext(os.path.split(datapath)[1])[0]
 data = pd.read_csv(datapath)
 distances = np.array(data['total_distance'])
 times = np.array(data['total_dt'])
@@ -30,6 +32,7 @@ n = np.round(dt / np.min(dt))
 # plt.legend()
 # plt.show()
 
+# Plot distances
 plt.plot(times, distances, label='TOF distance', marker='.')
 if 'absolute_distance' in data.columns:
     plt.plot(times, data['absolute_distance'], label='Absolute TOF distance', marker='.')
@@ -38,24 +41,46 @@ if 'gps_distance' in data.columns:
 plt.xlabel('Time (s)')
 plt.ylabel('Distance (m)')
 plt.legend()
+plt.suptitle('{} distance'.format(name))
 fig = plt.gcf()
 plt.show()
 
-savepath = get_savepath(datapath, '', replace=replace)
+savepath = utils.get_savepath(datapath, '', replace=replace)
 print('Saving to {}'.format(savepath))
-savefig(fig, savepath)
+utils.savefig(fig, savepath)
 
-plt.plot(times, data['gps_speed'], label='GPS speed', marker='.')
-plt.plot(times, data['logged_speed'], label='Logged speed', marker='.')
-plt.legend()
-plt.xlabel('Time (s)')
-plt.ylabel('Speed (m/s)')
-fig = plt.gcf()
-plt.show()
+# Plot speeds
+if 'gps_speed' in data.columns:
+    plt.plot(times, data['gps_speed'], label='GPS speed', marker='.')
+    if 'logged_speed' in data.columns:
+        plt.plot(times, data['logged_speed'], label='Logged speed', marker='.')
+    plt.xlabel('Time (s)')
+    plt.ylabel('Speed (m/s)')
+    plt.legend()
+    plt.suptitle('{} speed'.format(name))
+    fig = plt.gcf()
+    plt.show()
 
-savepath = get_savepath(datapath, '_speeds', replace=replace)
-print('Saving to {}'.format(savepath))
-savefig(fig, savepath)
+    savepath = utils.get_savepath(datapath, '_speed', replace=replace)
+    print('Saving to {}'.format(savepath))
+    utils.savefig(fig, savepath)
+
+# Plot robot heading and bearing to tag
+if 'logged_heading' in data.columns:
+    # center = np.mean(utils.wrap_to_360(data['logged_heading']))
+    plt.plot(times, utils.wrap_to_180(data['logged_heading']), label='Robot heading (relative to north)', marker='.')
+    if 'tag_bearing' in data.columns:
+        plt.plot(times, utils.wrap_to_180(np.degrees(data['tag_bearing'])), label='Tag bearing (relative to robot heading)', marker='.')
+    plt.xlabel('Time (s)')
+    plt.ylabel('Angle (deg)')
+    plt.legend()
+    plt.suptitle('{} direction'.format(name))
+    fig = plt.gcf()
+    plt.show()
+
+    savepath = utils.get_savepath(datapath, '_direction', replace=replace)
+    print('Saving to {}'.format(savepath))
+    utils.savefig(fig, savepath)
 
 # start_time = datetime.fromisoformat(data['datetime'][0])
 # move_0 = datetime.fromisoformat('2022-05-31 16:15:02')

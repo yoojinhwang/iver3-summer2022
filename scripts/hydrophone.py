@@ -205,17 +205,17 @@ class Hydrophone:
             partial_line = self._ser.readline()
             self._line_buffer += partial_line
 
-            # Check if there is an entire line in the read buffer and if so, remove it from the buffer and return it
-            if b'\r\n' in partial_line:
-                line, rest = self._line_buffer.split(b'\r\n', maxsplit=1)
-                self._line_buffer = rest
+        # Check if there is an entire line in the read buffer and if so, remove it from the buffer and return it
+        if b'\r\n' in partial_line:
+            line, rest = self._line_buffer.split(b'\r\n', maxsplit=1)
+            self._line_buffer = rest
 
-                # Sometimes the hydrophone sends trash data that can't be converted to a string?? If so, ignore it.
-                try:
-                    return line.decode('utf-8')
-                except UnicodeDecodeError as err:
-                    print('Discarding line: ', err)
-                    return ''
+            # Sometimes the hydrophone sends trash data that can't be converted to a string?? If so, ignore it.
+            try:
+                return line.decode('utf-8')
+            except UnicodeDecodeError as err:
+                print('Discarding line: ', err)
+                return ''
         return ''
 
     def _parse_line(self, line):
@@ -361,18 +361,6 @@ class Hydrophone:
                 tag_info['delta_distance'] = delta_distance
                 tag_info['accumulated_distance'] += delta_distance
 
-                # total_dt = (detection_time - self._tags[tag_id]['first_detection_time']).total_seconds()
-                # relative_tof = (total_dt - Hydrophone._AVG_DT / 2) % Hydrophone._AVG_DT - Hydrophone._AVG_DT / 2
-                # relative_distance = relative_tof * Hydrophone._SPEED_OF_SOUND
-
-                # dt = (detection_time - self._tags[tag_id]['previous_detection_time']).total_seconds()
-                # delta_tof = (dt - Hydrophone._AVG_DT / 2) % Hydrophone._AVG_DT - Hydrophone._AVG_DT / 2
-                # delta_distance = delta_tof * Hydrophone._SPEED_OF_SOUND
-                # self._tags[tag_id]['time_of_flight'] += delta_tof
-                # total_tof = self._tags[tag_id]['time_of_flight']
-                # total_distance = total_tof * Hydrophone._SPEED_OF_SOUND
-                # self._tags[tag_id]['previous_detection_time'] = detection_time
-
             if callable(self._detection_callback):
                 self._detection_callback(detection, copy.deepcopy(self._tags[tag_id]))
 
@@ -424,7 +412,9 @@ class Hydrophone:
         return type(self._state) == Closed
     
     def get_tag_info(self):
+        '''Return the hydrophone's internal information about each tag it has detected'''
         return copy.deepcopy(self._tags)
 
     def on_detection(self, callback):
+        '''Register a callback function to be run everytime the hydrophone receives a detection'''
         self._detection_callback = callback

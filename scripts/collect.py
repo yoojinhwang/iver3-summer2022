@@ -2,7 +2,7 @@ from hydrophone import Hydrophone
 from gps import GPS
 import time
 import sys
-from common import add_version, mkdir
+import utils
 import os
 import csv
 
@@ -36,8 +36,8 @@ if __name__ == '__main__':
     if len(rest) != 0:
         savepath = rest[0]
         directory, filename = os.path.split(savepath)
-        mkdir(directory)
-        savefile = open(add_version(savepath), 'w', newline='')
+        utils.mkdir(directory)
+        savefile = open(utils.add_version(savepath), 'w', newline='')
 
         # Write the csv header
         writer = csv.writer(savefile)
