@@ -1,111 +1,31 @@
-import serial
-from abc import ABC, abstractmethod
+from serial_device import SerialDevice, SerialState, Idle, Listening, Closed
 import re
+import time
 
-class GPSState(ABC):
+class GPSState(SerialState):
     '''Abstract class representing a state that the GPS can be in'''
     def __init__(self, gps):
+        super().__init__(gps)
         self._gps = gps
-    
-    @abstractmethod
-    def run(self):
-        pass
 
-class Idle(GPSState):
-    '''Does nothing'''
-    def __init__(self, gps):
-        super().__init__(gps)
-    
-    def run(self):
-        pass
-
-class Listening(GPSState):
-    '''Processes GPS data'''
-    def __init__(self, gps):
-        super().__init__(gps)
-        self._gps._ser.flush()
-    
-    def run(self):
-        # Read all available lines and keep track of the ones that include position information
-        messages = []
-
-        line = self._gps._readline()
-        while len(line) != 0:
-            # Check whether a line is a detection line and if so, store it
-            try:
-                contents = self._gps._parse_line(line)
-                if contents['message'] in ['GLL']:
-                    messages.append(contents)
-            except KeyboardInterrupt:
-                raise KeyboardInterrupt
-            except Exception as err:
-                print(err)
-
-            # Try to read another line
-            line = self._gps._readline()
-        
-        self._gps._process_messages(messages)
-
-class Closed(GPSState):
-    '''Does nothing except close the serial communication on init'''
-    def __init__(self, gps):
-        super().__init__(gps)
-        if self._gps._ser is not None:
-            print('Closing serial port')
-            self._gps._ser.close()
-    
-    def run(self):
-        pass
-
-class GPS:
+class GPS(SerialDevice):
     '''Takes care of the serial communication with the GPS'''
     
     # Extract information from NMEA formatted lines
     # https://regex101.com/r/3Yt5gH/1
     _NMEA_REGEX = re.compile(r'^\$(\w{2})(\w{3}),(.*)\*([0-9A-F]{2})$')
 
-    def __init__(self, com_port):
+    def __init__(self, com_port, verbosity=0):
         '''Requires the com port that the GPS is on'''
-        self._com_port = com_port
-        self._state = Idle(self)
-        self._line_buffer = b''
+        super().__init__(com_port, verbosity=verbosity)
         self._latitude = None
         self._longitude = None
-
-        # Attempt to open a serial port for the gps. If this fails, switch to the closed state
-        self._ser = None
-        try:
-            self._ser = serial.Serial(
-                self._com_port,
-                baudrate=9600,
-                timeout=0)
-        except serial.SerialException:
-            print('Unable to open port {}'.format(com_port))
-            self._state = Closed(self)
     
-    def _readline(self):
-        '''Wrapper over serial.Serial.readline with some extra functionality to handle being called repeatedly in a while loop'''
-        
-        # If no data is waiting to be read, return an empty string
-        if self._ser.in_waiting:
-            # Read a line from the serial port. Since this is being called in a loop repeatedly, the result of readline may not be
-            # an entire line. Only the first part of a line might be available. The result is appended to the hydrophone's read
-            # buffer for use when an entire line is ready.
-            partial_line = self._ser.readline()
-            self._line_buffer += partial_line
-
-        # Check if there is an entire line in the read buffer and if so, remove it from the buffer and return it
-        if b'\r\n' in partial_line:
-            line, rest = self._line_buffer.split(b'\r\n', maxsplit=1)
-            self._line_buffer = rest
-
-            # Sometimes the hydrophone sends trash data that can't be converted to a string?? If so, ignore it.
-            try:
-                return line.decode('utf-8')
-            except UnicodeDecodeError as err:
-                print('Discarding line: ', err)
-                return ''
-        return ''
+    def __repr__(self):
+        return '<GPS({}) at {}>'.format(self._com_port, hex(id(self)))
+    
+    def __str__(self):
+        return 'GPS({})'.format(self._com_port)
 
     def _parse_line(self, line):
         '''Extract the contents of a line sent by the GPS into a dictionary'''
@@ -146,26 +66,21 @@ class GPS:
             longitude *= -1
         return longitude
 
-    def _process_messages(self, messages):
+    def _process_lines(self, lines):
         '''Process the lines received by the GPS'''
-        for message in messages:
-            self._latitude = message['data']['latitude']
-            self._longitude = message['data']['longitude']
-
-    def run(self):
-        '''Should be run in a loop without much delay between calls'''
-        self._state.run()
-    
-    def close(self):
-        '''Close the serial connection. After this is called, the GPS object becomes unusable'''
-        if type(self._state) != Closed:
-            self._state = Closed(self)
-            return True
-        return False
+        for line in lines:
+            try:
+                contents = self._parse_line(line)
+                if contents['message'] in ['GLL']:
+                    self._latitude = contents['data']['latitude']
+                    self._longitude = contents['data']['longitude']
+            except Exception as err:
+                self._print('Exception while processing line:', err, v=2)
     
     def start(self):
         '''Set the GPS to the listening state'''
         if type(self._state) != Closed:
+            self._print('Starting', v=1)
             self._state = Listening(self)
             return True
         return False
@@ -173,36 +88,41 @@ class GPS:
     def stop(self):
         '''Set the GPS to the idle state'''
         if type(self._state) != Closed:
+            self._print('Stopping', v=1)
             self._state = Idle(self)
             return True
         return False
     
-    def is_idle(self):
-        '''Check whether the GPS is currently idle'''
-        return type(self._state) == Idle
+    def is_starting(self):
+        '''Check whether the GPS is currently starting'''
+        return False
     
-    def is_listening(self):
-        '''Check whether the GPS is currently listening'''
-        return type(self._state) == Listening
-    
-    def is_closed(self):
-        '''Check whether the GPS is currently closed'''
-        return type(self._state) == Closed
+    def is_stopping(self):
+        '''Check whether the GPS is currently stopping'''
+        return False
 
-    def get_latitude(self):
-        return self._latitude
+    def get_latitude(self, default=None):
+        if self.is_closed() or self._latitude is None:
+            return default
+        else:
+            return self._latitude
     
-    def get_longitude(self):
-        return self._longitude
+    def get_longitude(self, default=None):
+        if self.is_closed() or self._latitude is None:
+            return default
+        else:
+            return self._longitude
 
 if __name__ == '__main__':
-    gps = GPS('COM5')
+    gps = GPS('COM5', verbosity=2)
     gps.start()
 
-    while True:
+    while gps.is_listening():
         try:
             gps.run()
+            print('Latitude: {} Longitude: {}'.format(gps.get_latitude(), gps.get_longitude()))
+            time.sleep(0.01)
         except KeyboardInterrupt:
             break
     
-    gps.close()
+    # gps.close()

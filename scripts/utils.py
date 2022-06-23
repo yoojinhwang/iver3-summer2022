@@ -146,7 +146,7 @@ def to_cartesian(coords, ref):
 
     delta_x = R * (coords[1] - ref[1]) * np.cos(ref[1])
     delta_y = R * (coords[0] - ref[0])
-    return delta_x, delta_y
+    return np.array([delta_x, delta_y]).T
 
 # def angle_between(ref, vec):
 #     '''
@@ -215,8 +215,8 @@ def angle_between(ref, vec):
     Use the right hand rule to determine the sign, where ref is the index finger.
     '''
     # Convert to numpy arrays in case it hasn't been done yet
-    ref = np.array(ref)
-    vec = np.array(vec)
+    ref = np.array(ref).T
+    vec = np.array(vec).T
 
     # Compute the dot product between the vectors
     dot = vec[0]*ref[0] + vec[1]*ref[1]
@@ -237,11 +237,11 @@ def angle_between(ref, vec):
     # the two vectors is 0 or it is pi. In the latter case, we want to leave the angle as pi.
     sign = sign - np.abs(sign) + 1
 
-    return sign * abs_angles
+    return (sign * abs_angles).T
 
 def unit_2d(angle):
     '''Get a unit vector from an angle'''
-    return np.array([np.cos(angle), np.sin(angle)])
+    return np.stack([np.cos(angle), np.sin(angle)], axis=-1)
 
 def wrap_to(theta, center=0, range=2*np.pi):
     '''Wrap to center-range/2, center+range/2'''

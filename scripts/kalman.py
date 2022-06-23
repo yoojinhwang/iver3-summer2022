@@ -19,8 +19,9 @@ class KalmanFilter():
         dt = np.diff(self._times)
         avg_dt = utils.avg_dt_dict[65478]
         # avg_dt = 8.18
-        self._delta_tof = np.array([0] + ((dt - avg_dt / 2) % avg_dt - avg_dt / 2).tolist())
-        # self._delta_tof = np.array(self._data['delta_tof'])
+        self._delta_tof = np.array(self._data['delta_tof'])
+        # self._delta_tof = np.where(np.isnan(self._data['gps_delta_tof']), 0, self._data['gps_delta_tof'])
+        # self._delta_tof = np.array([0] + ((dt - avg_dt / 2) % avg_dt - avg_dt / 2).tolist())
         self._signal_level = utils.iir_filter(np.array(self._data['signal_level']), ff=1)
         self._start_time = 0
         self._end_time = self._times[-1]
@@ -40,8 +41,8 @@ class KalmanFilter():
         # self._signal_var = 5.513502243014629**2  # variance in the signal intensity not explained by distance
         self._signal_var = 15.297
 
-        self._distance_var = 1e-5
-        self._velocity_var = 1e-1
+        self._distance_var = 1e-3
+        self._velocity_var = 0.0604
 
         # Setup the rest of the variables that need to change when run is called
         self.reset()
@@ -99,10 +100,10 @@ class KalmanFilter():
         self._history = np.array(self._history)
         self._cov_history = np.array(self._cov_history)
 
-    def plot(self, show=True, save=True):
+    def plot(self, show=True, save=True, replace=False):
         prediction_times = np.arange(len(self._history)) * self._prediction_period
         filtered_distance = self._history[:, 0]
-        tof_distance = np.array(self._data['total_distance'])
+        tof_distance = np.cumsum(self._delta_tof * self._speed_of_sound)
         signal_distance = np.array((self._signal_level - self._b - self._l * self._data['gps_speed']) / self._m)
         smoothed_signal_distance = utils.iir_filter(signal_distance, ff=0.3)
         if 'gps_distance' in self._data.columns:
@@ -169,7 +170,7 @@ class KalmanFilter():
 
         # Save figure
         if save:
-            savepath = utils.get_savepath(self._data_path, '_kalman_filter')
+            savepath = utils.get_savepath(self._data_path, '_kalman_filter', replace=replace)
             print('Saving to {}'.format(savepath))
             utils.savefig(fig, savepath)
         
@@ -192,73 +193,73 @@ if __name__ == '__main__':
 
     # kf = KalmanFilter('../data/05-26-2022/tag78-0m-air-test-0.csv')
     # kf = KalmanFilter('../data/06-01-2022/tag78_50m_increment_long_beach_test_457012_2.csv', prediction_rate=1)
-    # kf = KalmanFilter('../data/06-08-2022/tag78_50m_increment_long_beach_test_457012_0.csv', prediction_rate=1)
+    kf = KalmanFilter('../data/06-08-2022/tag78_50m_increment_long_beach_test_457012_0.csv', prediction_rate=1)
     # kf = KalmanFilter('../data/06-08-2022/tag78_cowling_none_long_beach_test_457012_0.csv', prediction_rate=1)
     # kf = KalmanFilter('../data/06-08-2022/tag78_cowling_none_long_beach_test_457049_0.csv', prediction_rate=1)
     # kf = KalmanFilter('../data/06-08-2022/tag78_50m_increment_long_beach_test_457049_0.csv', prediction_rate=1)
     
-    # kf.run()
-    # kf.plot()
+    kf.run()
+    kf.plot(save=True, replace=replace)
 
-    paths = [
-        '../data/06-08-2022/tag78_50m_increment_long_beach_test_457012_0.csv',
-        '../data/06-08-2022/tag78_50m_increment_long_beach_test_457049_0.csv',
-        '../data/06-08-2022/tag78_cowling_none_long_beach_test_457012_0.csv',
-        '../data/06-08-2022/tag78_cowling_none_long_beach_test_457049_0.csv'
-    ]
-    errors = []
-    data_idx = 0  # 0 means total error. 3 means average error. 4 means error standard deviation.
-    # xrange = range(-8, 3)
-    # yrange = range(-8, 3)
-    # xrange = np.linspace(1e-3, 1e-1, 11)
-    # yrange = np.linspace(1e-3, 1e-1, 11)
-    xrange = np.linspace(0.0001, 0.001, 11)
-    yrange = np.linspace(0.0001, 0.001, 11)
-    for path in paths:
-        kf = KalmanFilter(path, prediction_rate=1)
-        errors.append([])
-        for i in yrange:
-            errors[-1].append([])
-            for j in xrange:
-                kf._distance_var = i
-                kf._velocity_var = j
-                kf.reset()
-                kf.run()
-                kf.plot(show=False, save=False)
-                isnan = np.isnan(kf._filtered_error)
-                errors[-1][-1].append([
-                    kf._total_filtered_error,
-                    np.max(kf._filtered_error[~isnan]),
-                    np.min(kf._filtered_error[~isnan]),
-                    np.mean(kf._filtered_error[~isnan]),
-                    np.std(kf._filtered_error[~isnan])
-                ])
-                print('Distance var={}, velocity var={}, total error={}, error mean={}, error stdev={}'.format(
-                    kf._distance_var, kf._velocity_var, errors[-1][-1][-1][0], errors[-1][-1][-1][3], errors[-1][-1][-1][4]
-                ))
-        errors[-1] = np.array(errors[-1])
-        im = np.flip(np.abs(errors[-1][:, :, data_idx]), axis=0)
-        ax = sns.heatmap(np.log(im), annot=im, linewidth=0.5, xticklabels=xrange, yticklabels=list(reversed(yrange)))
-        ax.set_xlabel('Velocity variance')
-        ax.set_ylabel('Distance variance')
-        ax.set_title('{} KF total error '.format(os.path.split(os.path.splitext(path)[0])[1]))
-        fig = plt.gcf()
-        plt.show()
+    # paths = [
+    #     '../data/06-08-2022/tag78_50m_increment_long_beach_test_457012_0.csv',
+    #     '../data/06-08-2022/tag78_50m_increment_long_beach_test_457049_0.csv',
+    #     '../data/06-08-2022/tag78_cowling_none_long_beach_test_457012_0.csv',
+    #     '../data/06-08-2022/tag78_cowling_none_long_beach_test_457049_0.csv'
+    # ]
+    # errors = []
+    # data_idx = 0  # 0 means total error. 3 means average error. 4 means error standard deviation.
+    # # xrange = range(-8, 3)
+    # # yrange = range(-8, 3)
+    # # xrange = np.linspace(1e-3, 1e-1, 11)
+    # # yrange = np.linspace(1e-3, 1e-1, 11)
+    # xrange = np.linspace(0.0001, 0.001, 11)
+    # yrange = np.linspace(0.0001, 0.001, 11)
+    # for path in paths:
+    #     kf = KalmanFilter(path, prediction_rate=1)
+    #     errors.append([])
+    #     for i in yrange:
+    #         errors[-1].append([])
+    #         for j in xrange:
+    #             kf._distance_var = i
+    #             kf._velocity_var = j
+    #             kf.reset()
+    #             kf.run()
+    #             kf.plot(show=False, save=False)
+    #             isnan = np.isnan(kf._filtered_error)
+    #             errors[-1][-1].append([
+    #                 kf._total_filtered_error,
+    #                 np.max(kf._filtered_error[~isnan]),
+    #                 np.min(kf._filtered_error[~isnan]),
+    #                 np.mean(kf._filtered_error[~isnan]),
+    #                 np.std(kf._filtered_error[~isnan])
+    #             ])
+    #             print('Distance var={}, velocity var={}, total error={}, error mean={}, error stdev={}'.format(
+    #                 kf._distance_var, kf._velocity_var, errors[-1][-1][-1][0], errors[-1][-1][-1][3], errors[-1][-1][-1][4]
+    #             ))
+    #     errors[-1] = np.array(errors[-1])
+    #     im = np.flip(np.abs(errors[-1][:, :, data_idx]), axis=0)
+    #     ax = sns.heatmap(np.log(im), annot=im, linewidth=0.5, xticklabels=xrange, yticklabels=list(reversed(yrange)))
+    #     ax.set_xlabel('Velocity variance')
+    #     ax.set_ylabel('Distance variance')
+    #     ax.set_title('{} KF total error '.format(os.path.split(os.path.splitext(path)[0])[1]))
+    #     fig = plt.gcf()
+    #     plt.show()
 
-        savepath = utils.get_savepath(path, '_kf_param_heatmap', replace=replace)
-        print('Saving to {}'.format(savepath))
-        utils.savefig(fig, savepath)
-    errors = np.array(errors)
-    # sums = np.apply_along_axis(np.sum, 1, np.abs(errors[:, :, :, data_idx]).reshape(len(paths), -1)).reshape(-1, 1, 1)
-    sums = utils.apply_along_axes(np.sum, (1, 3), np.abs(errors[:, :, :, data_idx])).reshape(-1, 1, 1)
-    im = np.flip(np.abs(np.sum(errors[:, :, :, data_idx] / (4 * sums), axis=0)), axis=0)
-    ax = sns.heatmap(np.log(im), annot=im, linewidth=0.5, xticklabels=xrange, yticklabels=list(reversed(yrange)))
-    ax.set_xlabel('Velocity variance')
-    ax.set_ylabel('Distance variance')
-    ax.set_title('KF total error (all)')
-    fig = plt.gcf()
-    plt.show()
+    #     savepath = utils.get_savepath(path, '_kf_param_heatmap', replace=replace)
+    #     print('Saving to {}'.format(savepath))
+    #     utils.savefig(fig, savepath)
+    # errors = np.array(errors)
+    # # sums = np.apply_along_axis(np.sum, 1, np.abs(errors[:, :, :, data_idx]).reshape(len(paths), -1)).reshape(-1, 1, 1)
+    # sums = utils.apply_along_axes(np.sum, (1, 3), np.abs(errors[:, :, :, data_idx])).reshape(-1, 1, 1)
+    # im = np.flip(np.abs(np.sum(errors[:, :, :, data_idx] / (4 * sums), axis=0)), axis=0)
+    # ax = sns.heatmap(np.log(im), annot=im, linewidth=0.5, xticklabels=xrange, yticklabels=list(reversed(yrange)))
+    # ax.set_xlabel('Velocity variance')
+    # ax.set_ylabel('Distance variance')
+    # ax.set_title('KF total error (all)')
+    # fig = plt.gcf()
+    # plt.show()
 
-    savepath = utils.add_version(os.path.join(save_to, 'kf_param_heatmap_all.png'), replace=replace)
-    print('Saving to {}'.format(savepath))
-    utils.savefig(fig, savepath)
+    # savepath = utils.add_version(os.path.join(save_to, 'kf_param_heatmap_all.png'), replace=replace)
+    # print('Saving to {}'.format(savepath))
+    # utils.savefig(fig, savepath)

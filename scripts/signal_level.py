@@ -21,17 +21,18 @@ def scrollable_legend(fig, legend):
     fig.canvas.mpl_connect("scroll_event", func)
 
 replace = True
+save = True
 
 # Create new dataframe to hold merged data
-data = pd.DataFrame([], columns=['source', 'path', 'total_dt', 'signal', 'distance', 'bearing', 'logged_speed', 'gps_speed'])
+data = pd.DataFrame([], columns=['source', 'path', 'total_dt', 'signal', 'distance', 'bearing', 'logged_speed', 'gps_speed', 'noise'])
 
 # Define some information about the tags in case distances need to be calculated
 tag_id = 65478
 
 # Loop through the files found
 files = utils.imerge(
-    utils.find_files('../data/06-08-2022', name=r'.*(?:increment|none).*0'),
-    utils.find_files('../data/06-01-2022', name=r'.*457012.*'))
+    utils.find_files('../data/06-08-2022', name=r'.*(?:increment|none).*457012_0'))
+    # utils.find_files('../data/06-01-2022', name=r'.*457012.*'))
     # utils.find_files('../data/06-01-2022', name=r'.*manual.*'))
     # utils.find_files('../data/05-26-2022', name=r'tag78.*', extension=r'\.csv'),
     # utils.find_files('../data/06-01-2022', extension=r'\.csv'))
@@ -77,23 +78,24 @@ for i, dir_entry in enumerate(files):
             distances = np.array([0.0] + np.cumsum(delta_tof * 1460).tolist())
 
         # Append data
-        # Columns: ['source', 'path', 'signal', 'distance', 'bearing', 'logged_speed', 'gps_speed']
+        # Columns: ['source', 'path', 'signal', 'distance', 'bearing', 'logged_speed', 'gps_speed', 'noise']
         partial_data = pd.DataFrame(np.array([
             [i] * len(df),
             [path] * len(df),
             get_df_column(df, 'total_dt'),
             signals,
             distances,
-            get_df_column(df, 'tag_bearing'),
+            get_df_column(df, 'relative_tag_bearing'),
             get_df_column(df, 'logged_speed'),
-            get_df_column(df, 'gps_speed')
+            get_df_column(df, 'gps_speed'),
+            get_df_column(df, 'noise_level'),
         ], dtype=object).T, columns=data.columns)
         data = pd.concat([data, partial_data])
     except Exception as err:
         print(err)
 
 # Set dtypes
-for col_name in ['source', 'total_dt', 'signal', 'distance', 'bearing', 'logged_speed', 'gps_speed']:
+for col_name in ['source', 'total_dt', 'signal', 'distance', 'bearing', 'logged_speed', 'gps_speed', 'noise']:
     data[col_name] = pd.to_numeric(data[col_name])
 data.set_index('source', inplace=True)
 
@@ -138,9 +140,10 @@ fig = plt.gcf()
 plt.show()
 
 # Save plot
-savepath = utils.add_version(os.path.join(save_to, 'signal_plot.png'), replace=replace)
-print('Saving to {}'.format(savepath))
-utils.savefig(fig, savepath)
+if save:
+    savepath = utils.add_version(os.path.join(save_to, 'signal_plot.png'), replace=replace)
+    print('Saving to {}'.format(savepath))
+    utils.savefig(fig, savepath)
 plt.close()
 
 # For each source try out different linear models to predict the signal strength
@@ -156,7 +159,10 @@ plt.close()
 # ]
 column_sets = [
     ['distance'],
-    ['distance', 'gps_speed']
+    ['distance', 'bearing'],
+    ['distance', 'gps_speed'],
+    ['distance', 'bearing', 'gps_speed'],
+    ['distance', 'bearing', 'gps_speed', 'logged_speed']
 ]
 for columns in column_sets:
     x = None
@@ -167,33 +173,48 @@ for columns in column_sets:
         else:
             path = source_data['path'].iloc[0]
             name = os.path.splitext(os.path.split(path)[1])[0]
-        vars = source_data[columns].to_numpy()
-        isnan = np.apply_along_axis(np.logical_or.reduce, 1, np.isnan(vars))
-        A = np.concatenate([vars, np.ones([len(vars), 1])], axis=1)
+        explanatory_vars = source_data[columns].to_numpy()
+        isnan = np.apply_along_axis(np.logical_or.reduce, 1, np.isnan(explanatory_vars))
+        A = np.concatenate([explanatory_vars, np.ones([len(explanatory_vars), 1])], axis=1)
         signals = np.array(source_data['signal'])
-        # if x is None:
-        x = np.linalg.lstsq(A[~isnan], signals[~isnan], rcond=None)[0]
+        if x is None:
+            x = np.linalg.lstsq(A[~isnan], signals[~isnan], rcond=None)[0]
         predicted_signals = A @ x
-        diff = signals[~isnan] - predicted_signals[~isnan]
-        r_sqr = 1 - np.var(diff) / np.var(signals[~isnan])
-        error = np.sqrt(np.sum(np.square(diff)))
-        plt.plot(source_data['total_dt'], signals, label='Signal level')
-        plt.plot(source_data['total_dt'], predicted_signals, label='Predicted signal level. R^2={:.6f}, error={:.6f}\nx={}'.format(r_sqr, error, x))
-        plt.xlabel('Time (s)')
-        plt.ylabel('Signal level (dB)')
-        plt.legend()
-        plt.suptitle('{}\nSignal model: {}'.format(name, columns))
+        diff = signals - predicted_signals
+        r_sqr = 1 - np.var(diff[~isnan]) / np.var(signals[~isnan])
+        error = np.sqrt(np.sum(np.square(diff[~isnan])))
+
+        # Plot signals, predicted signals, error, etc.
+        fig, axd = plt.subplot_mosaic([['left', 'left', 'right']])
+        ax0, ax1 = axd['left'], axd['right']
+        ax0.plot(source_data['total_dt'], signals, label='Signal level')
+        ax0.plot(source_data['total_dt'], predicted_signals, label='Predicted signal level. R^2={:.6f}, error={:.6f}\nx={}'.format(r_sqr, error, x))
+        ax0_twin = ax0.twinx()
+        ax0_twin.plot(source_data['total_dt'], diff, color='#2ca02c', label='Error: mean={:.6f}, var={:.6f}'.format(np.mean(diff[~isnan]), np.var(diff[~isnan])))
+        ax0.set_xlabel('Time (s)')
+        ax0.set_ylabel('Signal level (dB)')
+        ax0_twin.set_ylabel('Error (dB)')
+        ax0.legend()
+        ax0_twin.legend()
+        ax0.set_title('Signal vs. time')
+        ax1.hist(diff, label='Error: mean={:.6f}, var={:.6f}'.format(np.mean(diff[~isnan]), np.var(diff[~isnan])))
+        ax1.set_xlabel('Error (dB)')
+        ax1.set_ylabel('Counts')
+        ax1.legend()
+        ax1.set_title('Error histogram')
         print('Model: {}. R^2={:.6f}, error={:.6f}, x={}'.format(columns, r_sqr, error, x))
-        fig = plt.gcf()
-        # plt.show()
+        fig.suptitle('{}\nSignal model: {}'.format(name, columns))
+        fig.set_tight_layout(tight=True)
+        plt.show()
 
         # Save plot
-        if is_full_dataset:
-            savepath = utils.add_version(os.path.join(save_to, 'all_data_model_{}.png'.format('_'.join(columns))), replace=replace)
-        else:
-            savepath = utils.get_savepath(path, '_model_{}'.format('_'.join(columns)), replace=replace)
-        print('Saving to {}'.format(savepath))
-        utils.savefig(fig, savepath)
+        if save:
+            if is_full_dataset:
+                savepath = utils.add_version(os.path.join(save_to, 'all_data_model_{}.png'.format('_'.join(columns))), replace=replace)
+            else:
+                savepath = utils.get_savepath(path, '_model_{}'.format('_'.join(columns)), replace=replace)
+            print('Saving to {}'.format(savepath))
+            utils.savefig(fig, savepath)
         plt.close()
         
 # for datapath, source, distance_subset, signal_subset in data:

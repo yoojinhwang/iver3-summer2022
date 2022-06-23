@@ -1,0 +1,4 @@
+serial_no,line_counter,datetime,code_space,tag_id,signal_level,noise_level,channel,latitude,longitude,total_dt,dt,delta_tof,delta_distance,total_distance
+,,2022-06-21 19:29:39.597276,,,,,,34.10664666666667,-117.71233916666667,,,,,
+,,2022-06-21 19:29:54.600224,,,,,,34.10661616666667,-117.71233266666667,,,,,
+,,2022-06-21 19:30:09.608228,,,,,,34.106591,-117.71230483333333,,,,,

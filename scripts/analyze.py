@@ -15,7 +15,7 @@ def reject_outliers(data, m=2):
     '''Remove datapoints more than m standard deviations away from the mean'''
     return data[abs(data - np.mean(data)) < m * np.std(data)]
 
-datapath = '../data/06-08-2022/tag78_cowling_front_1_long_beach_test_457012_0.csv'
+datapath = '../data/06-08-2022/tag78_cowling_back_1_long_beach_test_457012_0.csv'
 name = os.path.splitext(os.path.split(datapath)[1])[0]
 data = pd.read_csv(datapath)
 distances = np.array(data['total_distance'])
@@ -32,6 +32,30 @@ n = np.round(dt / np.min(dt))
 # plt.legend()
 # plt.show()
 
+# Plot trajectory
+if 'x' in data.columns and 'y' in data.columns:
+    x, y = np.array(data['x']), np.array(data['y'])
+    x = x[~np.isnan(x)]
+    y = y[~np.isnan(y)]
+    dx = np.concatenate([np.diff(x), [0]])
+    dy = np.concatenate([np.diff(y), [0]])
+    
+    plt.quiver(x, y, dx, dy, label='Hydrophone trajectory', facecolor='#1f77b4', units='xy', angles='xy', scale_units='xy', scale=1)
+    # plt.plot(data['x'], data['y'], marker='.', label='Hydrophone trajectory')
+    plt.plot(x[0], y[0], marker='o', color='blue', label='Start')
+    plt.plot(x[-1], y[-1], marker='o', color='red', label='End')
+    plt.plot([0], [0], marker='o', color='#ff7f0e', label='Tag')
+    plt.xlabel('East (m)')
+    plt.ylabel('North (m)')
+    plt.legend()
+    plt.suptitle('{} trajectory'.format(name))
+    fig = plt.gcf()
+    plt.show()
+
+    savepath = utils.get_savepath(datapath, '_trajectory', replace=replace)
+    print('Saving to {}'.format(savepath))
+    utils.savefig(fig, savepath)
+
 # Plot distances
 plt.plot(times, distances, label='TOF distance', marker='.')
 if 'absolute_distance' in data.columns:
@@ -45,7 +69,7 @@ plt.suptitle('{} distance'.format(name))
 fig = plt.gcf()
 plt.show()
 
-savepath = utils.get_savepath(datapath, '', replace=replace)
+savepath = utils.get_savepath(datapath, '_distance', replace=replace)
 print('Saving to {}'.format(savepath))
 utils.savefig(fig, savepath)
 
@@ -66,21 +90,24 @@ if 'gps_speed' in data.columns:
     utils.savefig(fig, savepath)
 
 # Plot robot heading and bearing to tag
+if 'gps_heading' in data.columns:
+    plt.plot(times, utils.wrap_to_180(np.degrees(data['gps_heading'])), label='Hydrophone heading (relative to east)', marker='.')
 if 'logged_heading' in data.columns:
-    # center = np.mean(utils.wrap_to_360(data['logged_heading']))
-    plt.plot(times, utils.wrap_to_180(data['logged_heading']), label='Robot heading (relative to north)', marker='.')
-    if 'tag_bearing' in data.columns:
-        plt.plot(times, utils.wrap_to_180(np.degrees(data['tag_bearing'])), label='Tag bearing (relative to robot heading)', marker='.')
-    plt.xlabel('Time (s)')
-    plt.ylabel('Angle (deg)')
-    plt.legend()
-    plt.suptitle('{} direction'.format(name))
-    fig = plt.gcf()
-    plt.show()
+    plt.plot(times, utils.wrap_to_180(np.degrees(utils.convert_heading(data['logged_heading']))), label='Logged robot heading (relative to east)', marker='.')
+if 'tag_bearing' in data.columns:
+    plt.plot(times, utils.wrap_to_180(np.degrees(data['tag_bearing'])), label='Tag bearing (relative to east)', marker='.')
+if 'relative_tag_bearing' in data.columns:
+    plt.plot(times, utils.wrap_to_180(np.degrees(data['relative_tag_bearing'])), label='Tag bearing (relative to robot heading)', marker='.')
+plt.xlabel('Time (s)')
+plt.ylabel('Angle (deg)')
+plt.legend()
+plt.suptitle('{} direction'.format(name))
+fig = plt.gcf()
+plt.show()
 
-    savepath = utils.get_savepath(datapath, '_direction', replace=replace)
-    print('Saving to {}'.format(savepath))
-    utils.savefig(fig, savepath)
+savepath = utils.get_savepath(datapath, '_direction', replace=replace)
+print('Saving to {}'.format(savepath))
+utils.savefig(fig, savepath)
 
 # start_time = datetime.fromisoformat(data['datetime'][0])
 # move_0 = datetime.fromisoformat('2022-05-31 16:15:02')

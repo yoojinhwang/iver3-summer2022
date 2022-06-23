@@ -1,5 +1,7 @@
 wheelhouse/*
 !wheelhouse/requirements.txt
+*.jsf
+*.PD0
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
