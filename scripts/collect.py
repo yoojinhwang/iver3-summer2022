@@ -8,7 +8,7 @@ import os
 import csv
 
 if __name__ == '__main__':
-    GPS_RATE = 15
+    GPS_RATE = 9
     last_gps_time = None
 
     # Read in command line arguments: port, serial_no, savepath to a file to dump data
@@ -52,7 +52,7 @@ if __name__ == '__main__':
     gps = GPS('COM5', verbosity=1)
 
     # Define a detection callback
-    def detection_callback(detection={}, tag_info={}):
+    def detection_callback(tag_info={}, detection={}):
         global last_gps_time
         last_gps_time = time.time()
 
@@ -61,6 +61,8 @@ if __name__ == '__main__':
         else:
             total_dt = ''
         
+        latitude, longitude = gps.get_coords(default=('', ''))
+
         # Collect all of the data
         detection_data = detection.get('data', {})
         data = [
@@ -72,8 +74,8 @@ if __name__ == '__main__':
             detection_data.get('signal_level', ''),
             detection_data.get('noise_level', ''),
             detection_data.get('channel', ''),
-            gps.get_latitude(default=''),
-            gps.get_longitude(default=''),
+            latitude,
+            longitude,
             total_dt,
             tag_info.get('delta_time', ''),
             tag_info.get('delta_tof', ''),
@@ -121,7 +123,7 @@ if __name__ == '__main__':
             
             # Log GPS coords if too much time has passed
             if time.time() - last_gps_time > GPS_RATE:
-                detection_callback({'datetime': datetime.now()})
+                detection_callback(detection={'datetime': datetime.now()})
 
             time.sleep(0.01)
         except KeyboardInterrupt:
@@ -136,3 +138,7 @@ if __name__ == '__main__':
             time.sleep(0.01)
         h1.close()
         gps.close()
+    
+    # Close savefile if one was created
+    if savefile is not None:
+        savefile.close()
