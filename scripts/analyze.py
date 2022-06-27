@@ -15,7 +15,7 @@ def reject_outliers(data, m=2):
     '''Remove datapoints more than m standard deviations away from the mean'''
     return data[abs(data - np.mean(data)) < m * np.std(data)]
 
-datapath = '../data/06-08-2022/tag78_cowling_back_1_long_beach_test_457012_0.csv'
+datapath = '../data/06-27-2022/tag78_cowling_small_snail_pool_test_457012_0.csv'
 name = os.path.splitext(os.path.split(datapath)[1])[0]
 data = pd.read_csv(datapath)
 distances = np.array(data['total_distance'])

@@ -3,12 +3,6 @@ import re
 import time
 from datetime import datetime
 
-class GPSState(SerialState):
-    '''Abstract class representing a state that the GPS can be in.'''
-    def __init__(self, gps):
-        super().__init__(gps)
-        self._gps = gps
-
 class GPS(SerialDevice):
     '''
     GPS state machine.
@@ -72,13 +66,16 @@ class GPS(SerialDevice):
         if contents['message'] == 'GLL':
             date_str = '{}{}'.format(datetime.now().strftime('%Y%m%d'), data[4])
             data_dict['datetime'] = datetime.strptime(date_str, '%Y%m%d%H%M%S.%f')
-            data_dict['latitude'] = self._parse_latitude(data[0], data[1])
-            data_dict['longitude'] = self._parse_longitude(data[2], data[3])
+            data_dict['latitude'] = GPS._parse_latitude(data[0], data[1])
+            data_dict['longitude'] = GPS._parse_longitude(data[2], data[3])
 
         contents['data'] = data_dict
         return contents
 
-    def _parse_latitude(self, latitude, latitude_dir):
+    def _parse_latitude(latitude, latitude_dir='N'):
+        if latitude == '' or latitude_dir == '':
+            return None
+
         degrees = latitude[:2]
         minutes = latitude[2:]
         latitude = float(degrees) + float(minutes) / 60
@@ -86,7 +83,10 @@ class GPS(SerialDevice):
             latitude *= -1
         return latitude
     
-    def _parse_longitude(self, longitude, longitude_dir):
+    def _parse_longitude(longitude, longitude_dir='E'):
+        if longitude == '' or longitude_dir == '':
+            return None
+
         degrees = longitude[:3]
         minutes = longitude[3:]
         longitude = float(degrees) + float(minutes) / 60
@@ -159,4 +159,4 @@ if __name__ == '__main__':
         except KeyboardInterrupt:
             break
     
-    # gps.close()
+    gps.close()

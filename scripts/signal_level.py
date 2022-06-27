@@ -31,14 +31,15 @@ tag_id = 65478
 
 # Loop through the files found
 files = utils.imerge(
-    utils.find_files('../data/06-08-2022', name=r'.*(?:increment|none).*457012_0'))
+    utils.find_files('../data/06-27-2022', extension=r'\.csv'))
+    # utils.find_files('../data/06-08-2022', name=r'.*(?:increment|none).*457012_0'))
     # utils.find_files('../data/06-01-2022', name=r'.*457012.*'))
     # utils.find_files('../data/06-01-2022', name=r'.*manual.*'))
     # utils.find_files('../data/05-26-2022', name=r'tag78.*', extension=r'\.csv'),
     # utils.find_files('../data/06-01-2022', extension=r'\.csv'))
     # utils.find_files('../data/05-31-2022', '../data/05-27-2022', extension=r'\.csv'))
     # utils.find_files('../../icex-lair-2021', name=r'data_[\d]+', extension=r'\.csv'))
-save_to = '../plots/06-08-2022'
+save_to = '../plots/06-27-2022'
 
 def get_df_column(df, name):
     return np.array(df.get(name, [np.nan] * len(df)))

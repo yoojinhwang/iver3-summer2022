@@ -92,7 +92,14 @@ class Starting(CommandSequence):
             next_state=Listening,
             timeout_state=Idle)
         self._print('Starting', v=1)
-        self._hydrophone._dispatch('on_starting')
+        self._hydrophone._dispatch('on_starting_init')
+    
+    def run(self):
+        self._hydrophone._dispatch('on_starting_run')
+        super().run()
+    
+    def end(self):
+        self._hydrophone._dispatch('on_starting_end')
 
 class Stopping(CommandSequence):
     '''Sends stop sequence to the hydrophone.'''
@@ -102,7 +109,14 @@ class Stopping(CommandSequence):
             next_state=Idle,
             timeout_state=Idle)
         self._print('Stopping', v=1)
-        self._hydrophone._dispatch('on_stopping')
+        self._hydrophone._dispatch('on_stopping_init')
+    
+    def run(self):
+        self._hydrophone._dispatch('on_stopping_run')
+        super().run()
+    
+    def end(self):
+        self._hydrophone._dispatch('on_stopping_end')
 
 class Hydrophone(SerialDevice):
     '''    
@@ -156,8 +170,17 @@ class Hydrophone(SerialDevice):
             Controls how much the hydrophone prints. 0 = nothing, 1 = some
             status messages, >2 = everything else.
         '''
+        # TODO: Add keyword arguments for each of the hydrophone's timeouts
         self._serial_no = serial_no
-        super().__init__(port, verbosity=verbosity, event_types=['on_starting', 'on_stopping', 'on_detection'])
+        super().__init__(port, verbosity=verbosity, event_types=[
+            'on_starting_init',
+            'on_starting_run',
+            'on_starting_end',
+            'on_stopping_init',
+            'on_stopping_run',
+            'on_stopping_end',
+            'on_detection'
+        ])
         self._timeout = timeout
         self._tags = {}
         self._detection_callback = None

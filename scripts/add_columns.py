@@ -7,9 +7,10 @@ knots_per_meter = 1.944
 meters_per_knot = 1 / knots_per_meter
 speed_of_sound = 1460
 
-tag_coords = (33.7421588, -118.12206)
-targetpath = '../data/06-08-2022/tag78_cowling_front_1_long_beach_test_457049_0.csv'
-sourcepath = None
+# tag_coords = (33.7421588, -118.12206)
+tag_coords = (34.100821, -117.706509)
+targetpath = '../data/06-27-2022/tag78_cowling_small_snail_pool_test_457012_0.csv'
+# sourcepath = None
 
 # 06-01-2022/50m_increment_2
 # sourcepath = r'../data\06-01-2022\20220601-155249-CH_Long_Beach_Mission_05_31_2022-IVER3-3013\Logs\20220601-155325--CH_Long_Beach_Mission_05_31_2022-IVER3-3013.log'
@@ -29,6 +30,13 @@ sourcepath = None
 
 # 06-08-2022/cowling_back_1
 # sourcepath = r'../data\06-08-2022\20220608-183307-CH_Long_Beach_Mission_1_06_07_2022-IVER3-3013\Logs\20220608-183312--CH_Long_Beach_Mission_1_06_07_2022-IVER3-3013.log'
+
+# sourcepath = r'../data\06-27-2022\20220627-202050-CH_Pool_Mission_6_05_31_2022-IVER3-3013\Logs\20220627-202135--CH_Pool_Mission_6_05_31_2022-IVER3-3013.log'
+# sourcepath = r'../data\06-27-2022\20220627-203120-CH_Pool_Mission_6_05_31_2022-IVER3-3013\Logs\20220627-203125--CH_Pool_Mission_6_05_31_2022-IVER3-3013.log'
+# sourcepath = r'../data\06-27-2022\20220627-203256-SRP_CH_Pool_Mission_6_05_31_2022-IVER3-3013\Logs\20220627-203342--SRP_CH_Pool_Mission_6_05_31_2022-IVER3-3013.log'
+# sourcepath = r'../data\06-27-2022\20220627-203523-SRP_CH_Pool_Mission_6_05_31_2022-IVER3-3013\Logs\20220627-203610--SRP_CH_Pool_Mission_6_05_31_2022-IVER3-3013.log'
+# sourcepath = r'../data\06-27-2022\20220627-203730-SRP_CH_Pool_Mission_6_05_31_2022-IVER3-3013\Logs\20220627-203817--SRP_CH_Pool_Mission_6_05_31_2022-IVER3-3013.log'
+sourcepath = r'../data\06-27-2022\20220627-203936-SRP_CH_Pool_Mission_6_05_31_2022-IVER3-3013\Logs\20220627-204023--SRP_CH_Pool_Mission_6_05_31_2022-IVER3-3013.log'
 
 hydrophone_data = pd.read_csv(targetpath)
 hydrophone_data['datetime'] = pd.to_datetime(hydrophone_data['datetime'])

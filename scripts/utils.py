@@ -264,7 +264,7 @@ def wrap_to_360(theta):
     return wrap_to(theta, center=180, range=360)
 
 def convert_heading(heading):
-    '''Convert a heading (angle in degrees, measured clockwise from north) to an angle in radians measured counterclockwise from west'''
+    '''Convert a heading (angle in degrees, measured clockwise from north) to an angle in radians measured counterclockwise from east'''
     return wrap_to_pi(-np.radians(heading) - np.pi)
 
 def combine_axes(arr, axes):

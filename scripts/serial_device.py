@@ -6,9 +6,15 @@ class SerialState(ABC):
     '''Abstract class representing a state that a serial device can be in.'''
     def __init__(self, device):
         self._device = device
+        if self._device._state is not None:
+            self._device._state.end()
     
     @abstractmethod
     def run(self):
+        pass
+
+    @abstractmethod
+    def end(self):
         pass
 
     def _print(self, *args, **kwargs):
@@ -19,19 +25,24 @@ class Idle(SerialState):
     def __init__(self, device):
         super().__init__(device)
         self._print('Idle', v=1)
-        self._device._dispatch('on_idle')
+        self._device._dispatch('on_idle_init')
     
     def run(self):
+        self._device._dispatch('on_idle_run')
         self._device._flush()
+    
+    def end(self):
+        self._device._dispatch('on_idle_end')
 
 class Listening(SerialState):
     '''Listen for data from the device.'''
     def __init__(self, device):
         super().__init__(device)
         self._print('Listening', v=1)
-        self._device._dispatch('on_listening')
+        self._device._dispatch('on_listening_init')
     
     def run(self):
+        self._device._dispatch('on_listening_run')
         try:
             # Read all available lines and process them
             lines = []
@@ -51,19 +62,25 @@ class Listening(SerialState):
         
         # Process the messages received
         self._device._process_lines(lines)
+    
+    def end(self):
+        self._device._dispatch('on_listening_end')
 
 class Closed(SerialState):
     '''Does nothing except close the serial communication on init.'''
     def __init__(self, device):
         super().__init__(device)
         self._print('Closed', v=1)
-        self._device._dispatch('on_closed')
+        self._device._dispatch('on_closed_init')
         if self._device._ser is not None:
             self._print('Closing serial port', v=1)
             self._device._ser.close()
     
     def run(self):
-        pass
+        self._device._dispatch('on_closed_run')
+    
+    def end(self):
+        self._device._dispatch('on_closed_end')
 
 class SerialDevice(EventDispatcher):
     '''
@@ -97,13 +114,20 @@ class SerialDevice(EventDispatcher):
             A list of event names to register in addition to the default ones.
         '''
         super().__init__([
-            'on_idle',
-            'on_listening',
-            'on_closed',
+            'on_idle_init',
+            'on_idle_run',
+            'on_idle_end',
+            'on_listening_init',
+            'on_listening_run',
+            'on_listening_end',
+            'on_closed_init',
+            'on_closed_run',
+            'on_closed_end',
             'on_line'
         ] + event_types)
         self._port = port
         self._verbosity = verbosity
+        self._state = None
         self._state = Idle(self)
         self._line_buffer = b''
 
@@ -268,7 +292,7 @@ class SerialDevice(EventDispatcher):
         '''
         return type(self._state) == Closed
     
-    def on_idle(self, callback):
+    def on_idle_init(self, callback):
         '''
         Register a callback to run when the device enters the Idle state.
         
@@ -277,9 +301,31 @@ class SerialDevice(EventDispatcher):
         callback : callable
             No parameters are passed in
         '''
-        self._register('on_idle', callback)
+        self._register('on_idle_init', callback)
     
-    def on_listening(self, callback):
+    def on_idle_run(self, callback):
+        '''
+        Register a callback to run while the device is in the Idle state.
+        
+        Parameters
+        ----------
+        callback : callable
+            No parameters are passed in
+        '''
+        self._register('on_idle_run', callback)
+    
+    def on_idle_end(self, callback):
+        '''
+        Register a callback to run when the device leaves the Idle state.
+        
+        Parameters
+        ----------
+        callback : callable
+            No parameters are passed in
+        '''
+        self._register('on_idle_end', callback)
+    
+    def on_listening_init(self, callback):
         '''
         Register a callback to run when the device enters the Listening state.
 
@@ -288,9 +334,31 @@ class SerialDevice(EventDispatcher):
         callback : callable
             No parameters are passed in        
         '''
-        self._register('on_listening', callback)
+        self._register('on_listening_init', callback)
     
-    def on_closed(self, callback):
+    def on_listening_run(self, callback):
+        '''
+        Register a callback to run while the device is in the Listening state.
+
+        Parameters
+        ----------
+        callback : callable
+            No parameters are passed in        
+        '''
+        self._register('on_listening_run', callback)
+    
+    def on_listening_end(self, callback):
+        '''
+        Register a callback to run when the device leaves the Listening state.
+
+        Parameters
+        ----------
+        callback : callable
+            No parameters are passed in        
+        '''
+        self._register('on_listening_end', callback)
+    
+    def on_closed_init(self, callback):
         '''
         Register a callback to run when the device enters the Closed state.
         
@@ -299,7 +367,29 @@ class SerialDevice(EventDispatcher):
         callback : callable
             No parameters are passed in
         '''
-        self._register('on_closed', callback)
+        self._register('on_closed_init', callback)
+    
+    def on_closed_run(self, callback):
+        '''
+        Register a callback to run while the device is in the Closed state.
+        
+        Parameters
+        ----------
+        callback : callable
+            No parameters are passed in
+        '''
+        self._register('on_closed_run', callback)
+
+    def on_closed_end(self, callback):
+        '''
+        Register a callback to run when the device leaves the Closed state.
+        
+        Parameters
+        ----------
+        callback : callable
+            No parameters are passed in
+        '''
+        self._register('on_closed_end', callback)
     
     def on_line(self, callback):
         '''
