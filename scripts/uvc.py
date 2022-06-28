@@ -22,8 +22,28 @@ class UVC(SerialDevice):
     _COMPASS_REGEX = re.compile(r'^([-\d\.]+)P([-\d\.]+)R([-\d\.]+)T([-\d\.]+)D([-\d\.]+)$')
 
     def __init__(self, port, verbosity=0):
-        super().__init__(port, verbosity=verbosity, event_types=['on_command'], baudrate=57600)
+        super().__init__(port, verbosity=verbosity, event_types=[
+            'on_command',
+            'on_compass',
+            'on_gps',
+            'on_dvl',
+            'on_ack'
+        ], baudrate=57600)
+        self._latitude = None
+        self._longitude = None
+        self._heading = None
+        self._x_speed = None
+        self._y_speed = None
         self.on_line(self._process_line)
+        self.on_compass(self._update_heading)
+        self.on_gps(self._update_coords)
+        self.on_dvl(self._update_speeds)
+
+    def __repr__(self):
+        return '<UVC({}) at {}>'.format(self._port, hex(id(self)))
+    
+    def __str__(self):
+        return 'UVC({})'.format(self._port)
 
     def _parse_line(self, line):
         '''Extract the contents of a line sent by the GPS into a dictionary.'''
@@ -99,9 +119,44 @@ class UVC(SerialDevice):
         return command_msg
     
     def _process_line(self, line):
-        # contents = self._parse_line(line)
-        # print(contents)
-        pass
+        contents = self._parse_line(line)
+        if contents['command'] == 'C':
+            self._dispatch('on_compass', contents=contents)
+        elif contents['command'] == 'GPRMC':
+            self._dispatch('on_gps', contents=contents)
+        elif contents['command'] == 'DVL':
+            self._dispatch('on_dvl', contents=contents)
+        elif contents['command'] == 'ACK':
+            self._dispatch('on_ack', contents=contents)
+
+    def _update_coords(self, contents):
+        self._latitude = contents['data']['latitude']
+        self._longitude = contents['data']['longitude']
+
+    def _update_heading(self, contents):
+        self._heading = contents['data']['heading']
+    
+    def _update_speeds(self, contents):
+        self._x_speed = contents['data']['x_speed']
+        self._y_speed = contents['data']['y_speed']
+
+    def get_heading(self, default=None):
+        if self.is_closed() or self._heading is None:
+            return default
+        else:
+            return self._heading
+
+    def get_coords(self, default=(None, None)):
+        if self.is_closed() or self._latitude is None or self._longitude is None:
+            return default
+        else:
+            return (self._latitude, self._longitude)
+    
+    def get_speeds(self, default=(None, None)):
+        if self.is_closed() or self._x_speed is None or self._y_speed is None:
+            return default
+        else:
+            return (self._x_speed, self._y_speed)
 
     def to_hex(self, value):
         '''
@@ -119,6 +174,18 @@ class UVC(SerialDevice):
 
     def on_command(self, callback):
         self._register('on_command', callback)
+    
+    def on_compass(self, callback):
+        self._register('on_compass', callback)
+    
+    def on_gps(self, callback):
+        self._register('on_gps', callback)
+    
+    def on_dvl(self, callback):
+        self._register('on_dvl', callback)
+    
+    def on_ack(self, callback):
+        self._register('on_ack', callback)
 
 if __name__ == '__main__':
     uvc = UVC('COM1', verbosity=1)

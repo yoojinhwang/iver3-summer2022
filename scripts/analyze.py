@@ -15,22 +15,28 @@ def reject_outliers(data, m=2):
     '''Remove datapoints more than m standard deviations away from the mean'''
     return data[abs(data - np.mean(data)) < m * np.std(data)]
 
-datapath = '../data/06-27-2022/tag78_cowling_small_snail_pool_test_457012_0.csv'
+datapath = '../data/06-27-2022/tag78_overnight_test_457049_0.csv'
 name = os.path.splitext(os.path.split(datapath)[1])[0]
 data = pd.read_csv(datapath)
 distances = np.array(data['total_distance'])
 times = np.array(data['total_dt'])
 signal = np.array(data['signal_level'])
-dt = np.diff(times)
+dt = np.diff(times[~np.isnan(times)])
 n = np.round(dt / np.min(dt))
 
-# data = reject_outliers(dt / n)
-# dt_mu, dt_std = np.mean(data), np.std(data)
-# x = np.linspace(np.min(data), np.max(data), 1001)
-# plt.hist(data, density=True)
-# plt.plot(x, gaussian(x, dt_mu, dt_std), label='N(mu={:.8f}, std={:.8f})'.format(dt_mu, dt_std))
-# plt.legend()
-# plt.show()
+# Plot a histogram of times between tag detections
+normed_dt = reject_outliers(dt / n)
+dt_mu, dt_std = np.mean(normed_dt), np.std(normed_dt)
+x = np.linspace(np.min(normed_dt), np.max(normed_dt), 1001)
+plt.hist(normed_dt, density=True)
+plt.plot(x, gaussian(x, dt_mu, dt_std), label='N(mu={:.8f}, std={:.8f})'.format(dt_mu, dt_std))
+plt.legend()
+fig = plt.gcf()
+plt.show()
+
+savepath = utils.get_savepath(datapath, '_histogram', replace=replace)
+print('Saving to {}'.format(savepath))
+utils.savefig(fig, savepath)
 
 # Plot trajectory
 if 'x' in data.columns and 'y' in data.columns:
