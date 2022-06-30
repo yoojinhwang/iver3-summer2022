@@ -8,13 +8,16 @@ from datetime import datetime
 import numpy as np
 
 # Define a callback to log data
-def log_data():
+def log_data(uvc):
+    knots_per_meter = 1.944
     latitude, longitude = uvc.get_coords(default=('',''))
     x_speed, y_speed = uvc.get_speeds(default=(np.nan, np.nan))
     if np.isnan(x_speed) or np.isnan(y_speed):
         speed = ''
     else:
+        print("Logdata variables")
         speed = np.sqrt(x_speed**2 + y_speed**2) * knots_per_meter
+        print(latitude, longitude, speed, uvc.get_heading(default=''))
     data = [
         datetime.now(),
         latitude,
@@ -24,8 +27,8 @@ def log_data():
     ]
 
     # Write to a savefile if one was given and to the console
-    if savefile is not None:
-        writer.writerow(data)
+    #if savefile is not None:
+    #    writer.writerow(data)
     print(','.join([str(datum) for datum in data]))
     return data
 

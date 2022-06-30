@@ -1,8 +1,9 @@
 # from gps import coords_callback
 from multiprocessing.dummy import Value
 from uvc import UVC
-from gps import get_coords
+#from gps import get_coords
 import time
+import sys
 
 from utils import *
 from log_uvc import log_data
@@ -44,20 +45,28 @@ class Robot():
         self._gps = ('','')
         self._heading = 0
 
-    def _get_controls(heading, coords, waypoint):
+    def _get_controls(self, heading, coords, waypoint, uvc):
         robot_to_waypoint = waypoint - coords
         robot_vec = np.array([np.cos(heading), np.sin(heading)])
         err_rho = norm(robot_to_waypoint)
         err_angle = angle_between(robot_to_waypoint, robot_vec)
-        thrust_control = K_RHO * err_rho
-        yaw_control = K_ALPHA * err_angle
+
+        #thrust_control = int(min(max(K_RHO * err_rho + 128, 0), 255))
+        yaw_control = int(min(max(K_ALPHA * err_angle + 128, 0), 255))
+        thrust_control = 128
+        
+        thrust_control = uvc.to_hex(thrust_control)
+        yaw_control = uvc.to_hex(yaw_control)
 
         return [thrust_control, yaw_control]
 
-    def _track_waypoint(self, uvc_object, origin, waypoint): 
-        current_data = log_data()
-        speed = current_data[3]
-        [lat, lon] = current_data[1:2]
+    def _track_waypoint(self, uvc_object, origin, waypoint):
+
+        current_data = log_data(uvc_object)
+        #print("current data is")
+        #print(current_data)
+        
+        lat, lon = current_data[1:3]
 
         # it reaches the default state
         if (lat, lon) != ('',''):
@@ -72,19 +81,43 @@ class Robot():
             self._heading = heading
             
         print("COMPASS", heading)
-        
-        [thrust, yaw_angle] = self._get_controls(self._heading, np.array([self._gps[0], self._gps[1]]), waypoint)
+        print(waypoint)
+        #[thrust, yaw_angle] = self._get_controls(self._heading, np.asarray(self._gps), waypoint, uvc_object)
+        [thrust, yaw_angle] = self._get_controls(20, np.array([0, 1]), np.array([1,2]), uvc_object)
         
         print("Thrust P control", thrust)
         print("Yaw angle", yaw_angle)
 
-        # send waypoint parameters
-        output = uvc_object._write_command('OMP','{}{}'.format(yaw_angle, yaw_angle), '80','80', '{}'.format(thrust), '00', '10')
+        
 
+        # send waypoint parameters
+        output = uvc_object._write_command('OMP','{}{}8080{}'.format(yaw_angle, yaw_angle, thrust), '00', '10')
         return output
         
-if __name__ == '__main__': 
+if __name__ == '__main__':
+
+    
+    
+    # Define the column names of the data to be logged
+    columns = [
+                'datetime',
+                'Latitude',
+                'Longitude',
+                'Vehicle Speed (Kn)',
+                'C True Heading'
+            ]
+
+ 
+    
     uvc = UVC('COM1', verbosity=1)
+
+    def request_data(uvc):
+        # request sensor data
+        uvc._write_command('OSD','C','G','S','P','Y','D','T','I')
+
+    #uvc.on_listening_run(request_data)
+    #uvc.on_listening_run(log_data(uvc))
+    
     uvc.start()
 
     robot = Robot()
@@ -92,15 +125,19 @@ if __name__ == '__main__':
     origin = robot._waypoints[0] # Nnn.nnnnn, Nnn.nnnnn
     next_waypoint = robot._waypoints[1]
 
-    while uvc.is_listening(): 
+    print(origin)
+    print(next_waypoint)
 
-        # request sensor data
+    while uvc.is_listening():
         uvc._write_command('OSD','C','G','S','P','Y','D','T','I')
-
         value = robot._track_waypoint(uvc, origin, next_waypoint)
         print("Command wrote to track waypoint", value)
 
         uvc.run()
         time.sleep(1)
-        
+
+    if not uvc.is_closed():
+        # Stop UVC
+        uvc.stop()
+        uvc.close()
     
