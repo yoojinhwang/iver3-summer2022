@@ -86,9 +86,7 @@ class Robot():
         [thrust, yaw_angle] = self._get_controls(20, np.array([0, 1]), np.array([1,2]), uvc_object)
         
         print("Thrust P control", thrust)
-        print("Yaw angle", yaw_angle)
-
-        
+        print("yaw angle", yaw_angle)
 
         # send waypoint parameters
         output = uvc_object._write_command('OMP','{}{}8080{}'.format(yaw_angle, yaw_angle, thrust), '00', '10')
