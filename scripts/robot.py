@@ -93,7 +93,6 @@ class Robot():
         return output
         
 if __name__ == '__main__':
-
     
     
     # Define the column names of the data to be logged
@@ -127,6 +126,7 @@ if __name__ == '__main__':
     print(next_waypoint)
 
     while uvc.is_listening():
+        print("UVC is listening")
         uvc._write_command('OSD','C','G','S','P','Y','D','T','I')
         value = robot._track_waypoint(uvc, origin, next_waypoint)
         print("Command wrote to track waypoint", value)
