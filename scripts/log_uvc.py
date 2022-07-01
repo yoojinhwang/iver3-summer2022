@@ -27,14 +27,15 @@ def log_data(uvc):
     ]
 
     # Write to a savefile if one was given and to the console
-    #if savefile is not None:
-    #    writer.writerow(data)
+    if savefile is not None:
+        writer.writerow(data)
     print(','.join([str(datum) for datum in data]))
     return data
 
 if __name__ == '__main__':
     # Read in command line arguments: savepath to a file to dump data
     _, *rest = sys.argv
+    #rest = ['\Users\iver\Documents\iver3-summer2022\data\']
     knots_per_meter = 1.944
 
     # Define the column names of the data to be logged
