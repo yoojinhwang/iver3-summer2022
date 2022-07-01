@@ -81,9 +81,8 @@ class Robot():
             self._heading = heading
             
         print("COMPASS", heading)
-        print(waypoint)
-        #[thrust, yaw_angle] = self._get_controls(self._heading, np.asarray(self._gps), waypoint, uvc_object)
-        [thrust, yaw_angle] = self._get_controls(20, np.array([0, 1]), np.array([1,2]), uvc_object)
+        
+        [thrust, yaw_angle] = self._get_controls(self._heading, np.asarray(self._gps), waypoint)
         
         print("Thrust P control", thrust)
         print("yaw angle", yaw_angle)
@@ -91,6 +90,8 @@ class Robot():
         # send waypoint parameters
         output = uvc_object._write_command('OMP','{}{}8080{}'.format(yaw_angle, yaw_angle, thrust), '00', '10')
         return output
+
+    
         
 if __name__ == '__main__':
     
@@ -100,11 +101,14 @@ if __name__ == '__main__':
                 'datetime',
                 'Latitude',
                 'Longitude',
+                'Cartesian X',
+                'Cartesian Y',
+                '',
+                'Thrust Control', 
+                'Yaw Control',
                 'Vehicle Speed (Kn)',
                 'C True Heading'
             ]
-
- 
     
     uvc = UVC('COM1', verbosity=1)
 

@@ -32,6 +32,8 @@ def log_data(uvc):
     print(','.join([str(datum) for datum in data]))
     return data
 
+
+
 if __name__ == '__main__':
     # Read in command line arguments: savepath to a file to dump data
     _, *rest = sys.argv
