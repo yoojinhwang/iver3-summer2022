@@ -23,7 +23,6 @@ class Robot():
     States
     ------
     create uvc object
-    waypoints? OJW (jump to waypoint)
 
     in the end we want thrust, pitch, and heading commands (send to UVC)
 
@@ -67,26 +66,46 @@ class Robot():
         thrust_control = uvc.to_hex(thrust_control)
         yaw_control = uvc.to_hex(yaw_control)
 
-        return [thrust_control, yaw_control]
+        return [thrust_control, yaw_control, err_angle, err_rho]
 
     # Define a callback to log data
-    def _log_data(self, uvc):
+    def _log_data(self, uvc, waypoint):
         knots_per_meter = 1.944
         latitude, longitude = uvc.get_coords(default=('',''))
         x_speed, y_speed = uvc.get_speeds(default=(np.nan, np.nan))
+
+        thrust_control, yaw_control, err_angle, err_rho = self._get_controls(uvc.get_heading(default=''), np.asarray(self._gps), waypoint, uvc)
+
         if np.isnan(x_speed) or np.isnan(y_speed):
             speed = ''
         else:
             print("Logdata variables")
             speed = np.sqrt(x_speed**2 + y_speed**2) * knots_per_meter
             print(latitude, longitude, speed, uvc.get_heading(default=''))
+
         data = [
             datetime.now(),
             latitude,
             longitude,
+            err_angle, 
+            err_rho,
+            thrust_control,
+            yaw_control,
             speed,
             uvc.get_heading(default='')
         ]
+
+        columns = [
+                'datetime',
+                'Latitude',
+                'Longitude',
+                'Error Angle',
+                'Error Thruster',
+                'Thrust Control', 
+                'Yaw Control',
+                'Vehicle Speed (Kn)',
+                'C True Heading'
+            ]
 
         # Write to a savefile if one was given and to the console
         if savefile is not None:
@@ -120,10 +139,12 @@ class Robot():
 
         print("COMPASS", heading)
         
-        [thrust, yaw_angle] = self._get_controls(self._heading, np.asarray(self._gps), waypoint)
+        [thrust, yaw_angle, err_angle, err_rho] = self._get_controls(self._heading, np.asarray(self._gps), waypoint)
         
         print("Thrust P control", thrust)
-        print("yaw angle", yaw_angle)
+        print("Yaw Angle", yaw_angle)
+        print("Error Angle", err_angle)
+        print("Error in Rho", err_rho)
 
         # send waypoint parameters
         output = uvc_object._write_command('OMP','{}{}8080{}'.format(yaw_angle, yaw_angle, thrust), '00', '10')
@@ -141,7 +162,8 @@ if __name__ == '__main__':
                 'datetime',
                 'Latitude',
                 'Longitude',
-                '',
+                'Error Angle',
+                'Error Thruster',
                 'Thrust Control', 
                 'Yaw Control',
                 'Vehicle Speed (Kn)',
