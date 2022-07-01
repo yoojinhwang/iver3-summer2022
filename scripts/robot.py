@@ -118,6 +118,7 @@ class Robot():
 
         if self._gps[0] != '' and heading != '':
             
+<<<<<<< HEAD
             print("COMPASS", heading)
             print(waypoint)
             print(np.asarray(self._gps))
@@ -134,6 +135,21 @@ class Robot():
             return output
         return None
             
+=======
+        print("COMPASS", heading)
+        
+        [thrust, yaw_angle] = self._get_controls(self._heading, np.asarray(self._gps), waypoint)
+        
+        print("Thrust P control", thrust)
+        print("yaw angle", yaw_angle)
+
+        # send waypoint parameters
+        output = uvc_object._write_command('OMP','{}{}8080{}'.format(yaw_angle, yaw_angle, thrust), '00', '10')
+        return output
+
+    
+        
+>>>>>>> bd61f1412af2ae9d29f225d565e4d6b840a39bd0
 if __name__ == '__main__':
 
     # Read in command line arguments: savepath to a file to dump data
@@ -144,9 +160,15 @@ if __name__ == '__main__':
                 'datetime',
                 'Latitude',
                 'Longitude',
+                'Cartesian X',
+                'Cartesian Y',
+                '',
+                'Thrust Control', 
+                'Yaw Control',
                 'Vehicle Speed (Kn)',
                 'C True Heading'
             ]
+<<<<<<< HEAD
 
     # Open a file to save the data to if a savepath was given
     if len(rest) != 0:
@@ -161,6 +183,8 @@ if __name__ == '__main__':
     else:
         savepath = None
         savefile = None
+=======
+>>>>>>> bd61f1412af2ae9d29f225d565e4d6b840a39bd0
     
     uvc = UVC('COM1', verbosity=1)
 
