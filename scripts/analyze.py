@@ -15,7 +15,7 @@ def reject_outliers(data, m=2):
     '''Remove datapoints more than m standard deviations away from the mean'''
     return data[abs(data - np.mean(data)) < m * np.std(data)]
 
-datapath = '../data/06-30-2022/test_circle_around.csv'
+datapath = '../data/07-03-2022/070322_circle_around'
 name = os.path.splitext(os.path.split(datapath)[1])[0]
 data = pd.read_csv(datapath)
 latitude = np.array(data['Latitude'])
@@ -30,16 +30,24 @@ x, y = np.array(data['Latitude']), np.array(data['Longitude'])
 x = x[~np.isnan(x)]
 y = y[~np.isnan(y)]
 
-print(x)
-print(y)
+cartesian_coords = []
+origin = np.array([34.106129, -117.713168])
+
+for i in range(0, len(x)):
+    lat = x[i]
+    lon = y[i]
+    cartesian_coords.append(utils.to_cartesian(np.array([lat, lon]), origin))
+
+x = [coord[0] for coord in cartesian_coords]
+y = [coord[1] for coord in cartesian_coords]
 
 plt.plot(x[0], y[0], marker='o', color='blue', label='Start')
 plt.plot(x[-1], y[-1], marker='o', color='red', label='End')
 
 plt.scatter(x=x, y = y)
-plt.title("GPS Coordinate Plots")
-plt.xlabel("Latitude")
-plt.ylabel("Longitude")
+plt.title("Cartesian Coordinate Plot")
+plt.xlabel("X (m)")
+plt.ylabel("Y (m)")
 plt.legend()
 fig = plt.gcf()
 savepath = utils.get_savepath(datapath, '_histogram', replace=replace)
@@ -47,6 +55,11 @@ print('Saving to {}'.format(savepath))
 utils.savefig(fig, savepath)
 
 plt.show()
+
+# Plot controls
+time = np.array(data['datetime'])
+yaw_control = np.array(date[''])
+
 
 # plt.plot(x[0], y[0], marker='o', color='blue', label='Start')
 # plt.plot(x[-1], y[-1], marker='o', color='red', label='End')

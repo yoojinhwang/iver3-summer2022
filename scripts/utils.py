@@ -144,7 +144,7 @@ def to_cartesian(coords, ref):
     # delta_x = R * (lon2 - lon1) * np.cos(lat1)
     # delta_y = R * (lat2 - lat1)
 
-    delta_x = R * (coords[1] - ref[1]) * np.cos(ref[1])
+    delta_x = R * (coords[1] - ref[1]) * np.cos(ref[0])
     delta_y = R * (coords[0] - ref[0])
     return np.array([delta_x, delta_y]).T
 
