@@ -6,7 +6,10 @@ from datetime import datetime
 import utils
 import os
 import matplotlib.dates as mdates
+<<<<<<< HEAD
 import matplotlib.animation as animation
+=======
+>>>>>>> 1e96eb30959f40bc1a7abd514375d0d9381ecfd9
 
 replace = True
 
@@ -63,6 +66,7 @@ utils.savefig(fig, savepath)
 plt.show()
 
 # Plot controls
+
 # convert to seconds
 time = np.array(data['datetime'])
 time_object = [datetime.strptime(x, '%Y-%m-%d %H:%M:%S.%f') for x in time]
