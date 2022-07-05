@@ -213,7 +213,7 @@ if __name__ == '__main__':
 
     start_time = time.time()
 
-    waypoint_index = 1
+    waypoint_index = 0
     while waypoint_index < len(robot._waypoints):
         waypoint = robot._waypoints[waypoint_index]
         print(waypoint_index)
@@ -225,7 +225,7 @@ if __name__ == '__main__':
             uvc.run()
             
             passed_time = time.time() - start_time
-            time.sleep(SEND_RATE - passed_time % SEND_RATE) # send commands at a constant rate
+            time.sleep(SEND_RATE - (passed_time % SEND_RATE)) # send commands at a constant rate
 
         if robot._dist_to_waypoint < DIST_THRESH:
             waypoint_index += 1
