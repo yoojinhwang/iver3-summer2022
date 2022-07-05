@@ -1,9 +1,11 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import datetime
 from datetime import datetime
 import utils
 import os
+import matplotlib.dates as mdates
 
 replace = True
 
@@ -21,10 +23,8 @@ data = pd.read_csv(datapath)
 latitude = np.array(data['Latitude'])
 longitude = np.array(data['Longitude'])
 # distances = np.array(data['total_distance'])
-# times = np.array(data['total_dt'])
+times = np.array(data['datetime'])
 # signal = np.array(data['signal_level'])
-# dt = np.diff(times[~np.isnan(times)])
-# n = np.round(dt / np.min(dt))
 
 x, y = np.array(data['Latitude']), np.array(data['Longitude'])
 x = x[~np.isnan(x)]
@@ -57,8 +57,28 @@ utils.savefig(fig, savepath)
 plt.show()
 
 # Plot controls
+
+# convert to seconds
 time = np.array(data['datetime'])
-yaw_control = np.array(date[''])
+time_object = [datetime.strptime(x, '%Y-%m-%d %H:%M:%S.%f') for x in time]
+timedelta = time_object[0] - datetime(1900, 1, 1)
+seconds = timedelta.total_seconds() #time since epoch
+
+time_object = [((x-datetime(1900, 1, 1))- timedelta) for x in time_object]
+print(time_object)
+
+time_total_seconds = [y.total_seconds() for y in time_object]
+print(time_total_seconds)
+print(type(time_total_seconds[0]))
+
+yaw = data['Yaw Control'].apply(int, base=16)
+thrust_control = np.array(data['Thrust Control'])
+
+plt.plot(time_total_seconds, yaw)
+plt.xlabel("Seconds")
+plt.ylabel("Thrust Control Decimal Values (0 - 255)")
+
+plt.show()
 
 
 # plt.plot(x[0], y[0], marker='o', color='blue', label='Start')
