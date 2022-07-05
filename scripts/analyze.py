@@ -16,6 +16,7 @@ def reject_outliers(data, m=2):
     return data[abs(data - np.mean(data)) < m * np.std(data)]
 
 datapath = '../data/06-30-2022/test_circle_around.csv'
+#datapath = '/Users/Declan/Desktop/HMC/AUV/iver3-summer2022/data/06-30-2022/test_circle_around.csv'
 name = os.path.splitext(os.path.split(datapath)[1])[0]
 data = pd.read_csv(datapath)
 latitude = np.array(data['Latitude'])
@@ -30,21 +31,50 @@ x, y = np.array(data['Latitude']), np.array(data['Longitude'])
 x = x[~np.isnan(x)]
 y = y[~np.isnan(y)]
 
-print(x)
-print(y)
+#print(x)
+#print(y)
+
+cartesian_coords = []
+#origin = np.array([34.1064, -117.7125])
+origin = np.array([34.106129, -117.713168])
+
+coords = np.array([x[1], y[1]])
+ref = origin
+
+
+R = 6371009
+coords = np.radians(coords)
+ref = np.radians(ref)
+delta_x = R * (coords[1] - ref[1]) * np.cos(ref[0])
+
+print(coords[1] - ref[1])
+print(ref[1])
+
+
+for i in range(0, len(x)):
+    lat = x[i]
+    lon = y[i]
+    cartesian_coords.append(utils.to_cartesian(np.array([lat, lon]), origin))
+
+#y = cartesian_coords[:,0]
+#x = cartesian_coords[:,1]
+x = [coord[0] for coord in cartesian_coords]
+y = [coord[1] for coord in cartesian_coords]
 
 plt.plot(x[0], y[0], marker='o', color='blue', label='Start')
 plt.plot(x[-1], y[-1], marker='o', color='red', label='End')
 
 plt.scatter(x=x, y = y)
 plt.title("GPS Coordinate Plots")
-plt.xlabel("Latitude")
-plt.ylabel("Longitude")
+#plt.xlabel("Latitude")
+#plt.ylabel("Longitude")
+plt.xlabel("x (m)")
+plt.ylabel("y (m)")
 plt.legend()
-fig = plt.gcf()
-savepath = utils.get_savepath(datapath, '_histogram', replace=replace)
-print('Saving to {}'.format(savepath))
-utils.savefig(fig, savepath)
+#fig = plt.gcf()
+#savepath = utils.get_savepath(datapath, '_histogram', replace=replace)
+#print('Saving to {}'.format(savepath))
+#utils.savefig(fig, savepath)
 
 plt.show()
 
