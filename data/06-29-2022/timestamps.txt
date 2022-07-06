@@ -1,0 +1,5 @@
+10:46 starting (pointing towards tag)
+10:49 3 o'clock (90 degrees clockwise)
+10:52 6 o'clock
+10:55 9 o'clock
+10:58 12 o'clock

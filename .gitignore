@@ -1,5 +1,7 @@
 wheelhouse/*
 !wheelhouse/requirements.txt
+
+# Exclude large mission log files that we are not using
 *.jsf
 *.PD0
 
