@@ -18,7 +18,8 @@ if __name__ == '__main__':
                 'Latitude',
                 'Longitude',
                 'Vehicle Speed (Kn)',
-                'C True Heading'
+                'C True Heading',
+                'DFS Depth(m)'
             ]
 
     # Open a file to save the data to if a savepath was given
@@ -55,7 +56,8 @@ if __name__ == '__main__':
             latitude,
             longitude,
             speed,
-            uvc.get_heading(default='')
+            uvc.get_heading(default=''),
+            uvc.get_depth(default='')
         ]
 
         # Write to a savefile if one was given and to the console

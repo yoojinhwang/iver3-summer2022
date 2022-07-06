@@ -15,7 +15,7 @@ def reject_outliers(data, m=2):
     '''Remove datapoints more than m standard deviations away from the mean'''
     return data[abs(data - np.mean(data)) < m * np.std(data)]
 
-datapath = '../data/06-27-2022/tag78_overnight_test_457049_0.csv'
+datapath = '../data/06-29-2022/tag78_cowling_small_snail_BFS_test_457012_0.csv'
 name = os.path.splitext(os.path.split(datapath)[1])[0]
 data = pd.read_csv(datapath)
 distances = np.array(data['total_distance'])
@@ -112,6 +112,19 @@ fig = plt.gcf()
 plt.show()
 
 savepath = utils.get_savepath(datapath, '_direction', replace=replace)
+print('Saving to {}'.format(savepath))
+utils.savefig(fig, savepath)
+
+# Plot signal level vs angle
+plt.scatter(data['relative_tag_bearing'], data['signal_level'], label='Relative tag bearing')
+plt.scatter(utils.convert_heading(data['logged_heading']), data['signal_level'], label='Compass heading (from east)')
+plt.xlabel('Angle (rad)')
+plt.ylabel('Signal level (dB)')
+plt.legend()
+plt.suptitle('{} signal level vs angle'.format(name))
+fig = plt.gcf()
+plt.show()
+savepath = utils.get_savepath(datapath, '_signal_vs_angle', replace=replace)
 print('Saving to {}'.format(savepath))
 utils.savefig(fig, savepath)
 

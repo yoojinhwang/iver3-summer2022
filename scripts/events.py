@@ -11,31 +11,31 @@ class EventDispatcher(ABC):
     '''
     def __init__(self, event_types):
         '''Initialize with the given event types.'''
-        self._event_types = event_types
-        self._callback_dict = {event_type: [] for event_type in self._event_types}
+        self.__event_types = event_types
+        self.__callback_dict = {event_type: [] for event_type in self.__event_types}
 
     def _add_event_types(self, event_types):
         '''Add a list of event types.'''
         for event_type in event_types:
-            if event_type not in self._event_types:
-                self._event_types.append(event_type)
-                self._callback_dict[event_type] = []
+            if event_type not in self.__event_types:
+                self.__event_types.append(event_type)
+                self.__callback_dict[event_type] = []
 
     def _set_callbacks(self, event_type, callbacks):
         '''Set the list of callbacks for a given event type.'''
         # Raise an error if the given event_type is not valid
-        if event_type not in self._event_types:
+        if event_type not in self.__event_types:
             raise ValueError('{} is not a registered event type.'.format(event_type))
         else:
-            self._callback_dict[event_type] = callbacks
+            self.__callback_dict[event_type] = callbacks
 
     def _get_callbacks(self, event_type):
         '''Get the list of callbacks for a given event type.'''
         # Raise an error if the given event_type name is not valid
-        if event_type not in self._event_types:
+        if event_type not in self.__event_types:
             raise ValueError('{} is not a registered event type.'.format(event_type))
         else:
-            return self._callback_dict[event_type]            
+            return self.__callback_dict[event_type]            
 
     def _register(self, event_type, callback):
         '''Register a callback for a given type.'''

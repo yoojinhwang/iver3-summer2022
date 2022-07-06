@@ -7,11 +7,23 @@ knots_per_meter = 1.944
 meters_per_knot = 1 / knots_per_meter
 speed_of_sound = 1460
 
+# First and second Long Beach deployment buoy location
 # tag_coords = (33.7421588, -118.12206)
+
+# Third (failed) Long Beach deployment buoy location
 # tag_coords = (34.100821, -117.706509)
-tag_coords = (34.106539,-117.7123235)
-targetpath = '../data/06-27-2022/tag78_overnight_test_457049_0.csv'
-sourcepath = None
+
+# Inside Parsons
+# tag_coords = (34.106539,-117.7123235)
+
+# 06-28-2022 BFS buoy location
+# tag_coords = (34.109179, -117.712774)
+
+# 06-29-2022 BFS buoy location
+tag_coords = (34.1090865, -117.712575)
+
+targetpath = '../data/06-29-2022/tag78_cowling_small_snail_BFS_test_457012_0.csv'
+sourcepath = '../data/06-29-2022/tag78_cowling_small_snail_BFS_test_uvc_log_0.csv'
 
 # 06-01-2022/50m_increment_2
 # sourcepath = r'../data\06-01-2022\20220601-155249-CH_Long_Beach_Mission_05_31_2022-IVER3-3013\Logs\20220601-155325--CH_Long_Beach_Mission_05_31_2022-IVER3-3013.log'
@@ -48,7 +60,10 @@ def get_hydrophone_column(name):
 # Add latitude, longitude, and logged speed column using the mission logs
 if sourcepath is not None:
     mission_data = pd.read_csv(sourcepath, sep=';')
-    mission_data['datetime'] = pd.to_datetime(mission_data['Date'] + ' ' + mission_data['Time'])
+    if 'datetime' not in mission_data.columns:
+        mission_data['datetime'] = pd.to_datetime(mission_data['Date'] + ' ' + mission_data['Time'])
+    else:
+        mission_data['datetime'] = pd.to_datetime(mission_data['datetime'])
     latitudes = get_hydrophone_column('latitude')
     longitudes = get_hydrophone_column('longitude')
     logged_speeds = get_hydrophone_column('logged_speed')

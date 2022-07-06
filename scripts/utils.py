@@ -59,11 +59,48 @@ def fit_line(x, y):
     A = np.vstack([x, np.ones(len(x))]).T
     return np.linalg.lstsq(A, y, rcond=None)[0]
 
-def imerge(*its):
+def imerge(*its, enum=True):
     '''Merge iterators end to end'''
-    for it in its:
-        for i in it:
-            yield i
+    for i, it in enumerate(its):
+        for el in it:
+            if enum:
+                yield i, el
+            else:
+                yield el
+
+def project_time_series(ref, ts, key=None):
+    '''Function to project a time series onto a reference time series'''
+    # Create key function if it does not exist yet
+    if key is None:
+        key = lambda x: x
+
+    # Set up some book keeping
+    it = iter(ts)
+    counter = next(it)
+    r_last = None
+
+    def get_next(r, start):
+        # Try getting the next value of the iterator thats larger than r
+        counter = start
+        try:
+            while counter is not None and key(counter) < key(r):
+                counter = next(it)
+        except StopIteration:
+            counter = None
+        return counter
+
+    # Iterate through the reference timeseries
+    for r, r_next in pairwise(ref):
+        r_last = r_next
+
+        counter = get_next(r, counter)
+        if counter is not None and key(counter) < key(r_next):
+            yield (r, counter)
+        else:
+            yield (r, None)
+
+    counter = get_next(r_last, counter)
+    yield (r_last, counter)
 
 def pairwise(iterable):
     '''s -> (s0,s1), (s1,s2), (s2, s3), ...'''

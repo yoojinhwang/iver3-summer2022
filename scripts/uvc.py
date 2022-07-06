@@ -17,7 +17,7 @@ class UVCState(SerialState):
 
 class UVC(SerialDevice):
     # Exract information from response lines
-    # https://regex101.com/r/JP9wEw/1
+    # https://regex101.com/r/0umeDn/1
     _RESPONSE_REGEX = re.compile(r'^\$([A-Z]+),?(.*)\*([0-9A-F]{2})$')
     _COMPASS_REGEX = re.compile(r'^([-\d\.]+)P([-\d\.]+)R([-\d\.]+)T([-\d\.]+)D([-\d\.]+)$')
 
@@ -32,10 +32,12 @@ class UVC(SerialDevice):
         self._latitude = None
         self._longitude = None
         self._heading = None
+        self._depth = None
         self._x_speed = None
         self._y_speed = None
         self.on_line(self._process_line)
         self.on_compass(self._update_heading)
+        self.on_compass(self._update_depth)
         self.on_gps(self._update_coords)
         self.on_dvl(self._update_speeds)
 
@@ -136,6 +138,9 @@ class UVC(SerialDevice):
     def _update_heading(self, contents):
         self._heading = contents['data']['heading']
     
+    def _update_depth(self, contents):
+        self._depth = contents['data']['depth']
+    
     def _update_speeds(self, contents):
         self._x_speed = contents['data']['x_speed']
         self._y_speed = contents['data']['y_speed']
@@ -145,6 +150,12 @@ class UVC(SerialDevice):
             return default
         else:
             return self._heading
+    
+    def get_depth(self, default=None):
+        if self.is_closed() or self._depth is None:
+            return default
+        else:
+            return self._depth
 
     def get_coords(self, default=(None, None)):
         if self.is_closed() or self._latitude is None or self._longitude is None:
