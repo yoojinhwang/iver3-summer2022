@@ -6,6 +6,7 @@ from datetime import datetime
 import utils
 import os
 import matplotlib.dates as mdates
+import matplotlib.animation as animation
 
 replace = True
 
@@ -31,7 +32,10 @@ x = x[~np.isnan(x)]
 y = y[~np.isnan(y)]
 
 cartesian_coords = []
-origin = np.array([34.106129, -117.713168])
+origin = np.array([34.106195, -117.712030])
+waypoint = np.array([34.106168, -117.712045])
+origin_cart = utils.to_cartesian(origin, origin)
+waypoint_cart = utils.to_cartesian(waypoint, origin)
 
 for i in range(0, len(x)):
     lat = x[i]
@@ -43,6 +47,8 @@ y = [coord[1] for coord in cartesian_coords]
 
 plt.plot(x[0], y[0], marker='o', color='blue', label='Start')
 plt.plot(x[-1], y[-1], marker='o', color='red', label='End')
+plt.plot(origin_cart[0], origin_cart[1], marker='o', color = 'green', label = 'Origin')
+plt.plot(waypoint_cart[0], waypoint_cart[1],marker='o', color = 'black',label = 'Waypoint')
 
 plt.scatter(x=x, y = y)
 plt.title("Cartesian Coordinate Plot")
@@ -76,9 +82,12 @@ thrust_control = np.array(data['Thrust Control'])
 
 plt.plot(time_total_seconds, yaw)
 plt.xlabel("Seconds")
-plt.ylabel("Thrust Control Decimal Values (0 - 255)")
+plt.ylabel("Yaw Control Decimal Values (0 - 255)")
 
 plt.show()
+
+# Plot gif for the robot moving at each time step overlay the robot vector on top
+
 
 
 # plt.plot(x[0], y[0], marker='o', color='blue', label='Start')
