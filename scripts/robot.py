@@ -15,8 +15,8 @@ from utils import to_cartesian
 norm = np.linalg.norm
 
 
-K_RHO = 1
-K_ALPHA = -75
+K_RHO = 6
+K_ALPHA = 75
 DIST_THRESH = 5
 SEND_RATE = 0.5
 
@@ -49,12 +49,23 @@ class Robot():
         # log compass and gps data at the same time
         #waypoints = np.array([[34.1064, -117.7125], [34.1063, -117.7125]])
         #waypoints = np.array([[34.106195, -117.712030], [34.106168, -117.712045]])
-        waypoints = np.array([[34.106200, -117.712010],
-                              [34.106200, -117.711830],
-                              [34.106010, -117.711830],
-                              [34.106010, -117.712010]])
+        #waypoints = np.array([[34.106196, -117.712059],
+        #                      [34.106203, -117.711912],
+        #                      [34.105996, -117.711960],
+        #                      [34.106013, -117.712048]])
+        # single line
+        waypoints = np.array([[34.109191, -117.712723],
+                              [34.109096, -117.712535],
+                              [34.109191, -117.712723]])
+        # triangle
+        #waypoints = np.array([[34.109191, -117.712723],
+        #                      [34.109040, -117.712552],
+        #                      [34.109150, -117.712503],
+        #                      [34.109191, -117.712723]])
+        
         self._origin = waypoints[0]
         self._waypoints = [to_cartesian(waypoint, waypoints[0]) for waypoint in waypoints]
+        self._current_waypoint = self._waypoints[0]
         self._thrust_control = 0
         self._yaw_control = 0
         self._dist_to_waypoint = 100
@@ -62,8 +73,9 @@ class Robot():
         self._heading = 0
 
     def _get_controls(self, heading, coords, waypoint, uvc):
+        self._current_waypoint = waypoint
         robot_to_waypoint = waypoint - coords
-        heading = heading - 90
+        heading = -heading + 90
         robot_vec = np.array([np.cos(heading*(np.pi/180)), np.sin(heading*(np.pi/180))])
         print("ROBOT to waypoint", robot_to_waypoint)
         print("ROBOT BEC", robot_vec)
@@ -72,11 +84,11 @@ class Robot():
         self._dist_to_waypoint = err_rho
         print("error angle", err_angle*180/np.pi)
 
-        #thrust_control = int(min(max(K_RHO * err_rho + 128, 0), 255))
+        thrust_control = int(min(max(K_RHO * err_rho + 128, 0), 255))
         yaw_control = int(min(max(K_ALPHA * err_angle + 128, 1), 255))
         print("integer yaw control here")
         print(yaw_control)
-        thrust_control = 128
+        #thrust_control = 128
         
         thrust_control = uvc.to_hex(thrust_control)
         yaw_control = uvc.to_hex(yaw_control)
@@ -87,6 +99,9 @@ class Robot():
     def _log_data(self, uvc):
         knots_per_meter = 1.944
         latitude, longitude = uvc.get_coords(default=('',''))
+        #print("gps", self._gps)
+        #(latitude, longitude) = self._gps
+        #print("latitude", latitude)
         x_speed, y_speed = uvc.get_speeds(default=(np.nan, np.nan))
         if np.isnan(x_speed) or np.isnan(y_speed):
             speed = ''
@@ -97,9 +112,13 @@ class Robot():
 
         print("GPS", type(self._gps[0]))
 
-        if self._gps[0] != '':
-            gps_x = to_cartesian(np.array([latitude,longitude]), self._origin)[0]
-            gps_y = to_cartesian(np.array([latitude,longitude]), self._origin)[1]
+        if self._gps[0] != '' and self._gps[1] != '':
+            try:
+                gps_x = to_cartesian(np.array([latitude,longitude]), self._origin)[0]
+                gps_y = to_cartesian(np.array([latitude,longitude]), self._origin)[1]
+            except:
+                gps_x = 0
+                gps_y = 0
         else:
             gps_x = 0
             gps_y = 0
@@ -107,13 +126,17 @@ class Robot():
         if uvc.get_heading(default='') == '':
             robot_vector = [0,0]
         else:
-            robot_vector = [np.cos(uvc.get_heading(default='')*(3.14159/180)), np.sin(uvc.get_heading(default='')*(3.14159/180))]
-            
+            transformed_heading = -uvc.get_heading(default='') + 90
+            robot_vector = [np.cos(transformed_heading*(3.14159/180)), np.sin(transformed_heading*(3.14159/180))]
+
+        robot_to_waypoint = self._current_waypoint - np.array([gps_x, gps_y])
+        
         data = [
             datetime.now(),
             latitude,
             longitude,
             robot_vector,
+            robot_to_waypoint,
             gps_x,
             gps_y,
             self._thrust_control,
@@ -135,7 +158,7 @@ class Robot():
         lat, lon = current_data[1:3]
 
         # it reaches the default state
-        if (lat, lon) != ('',''):
+        if (lat != '' and lon != ''):
             print("got gps")
             self._gps = to_cartesian(np.array([lat, lon]), self._origin)
             
@@ -143,14 +166,14 @@ class Robot():
         print("GPS Y", self._gps[1])
 
         heading = current_data[-1]
-        if heading != None:
+        if heading != '':
             print("got heading", self._heading)
             self._heading = heading
 
         if self._gps[0] != '' and heading != '':
             
             print("COMPASS", heading)
-            print(waypoint)
+            print("waypoint", waypoint)
             print(np.asarray(self._gps))
             [thrust, yaw_angle] = self._get_controls(self._heading, np.asarray(self._gps), waypoint, uvc_object)
             #[thrust, yaw_angle] = self._get_controls(20, np.array([0, 1]), np.array([1,2]), uvc_object)
@@ -177,6 +200,7 @@ if __name__ == '__main__':
                 'Cartesian X',
                 'Cartesian Y',
                 'Robot Vector',
+                'Robot to Waypoint Vector',
                 'Thrust Control', 
                 'Yaw Control',
                 'Vehicle Speed (Kn)',
@@ -206,9 +230,9 @@ if __name__ == '__main__':
     uvc.start()
     robot = Robot()
 
-    next_waypoint = robot._waypoints[1]
+    #next_waypoint = robot._waypoints[1]
 
-    print(next_waypoint)
+    #print(next_waypoint)
     print(','.join(columns))
 
     start_time = time.time()
@@ -216,10 +240,11 @@ if __name__ == '__main__':
     waypoint_index = 0
     while waypoint_index < len(robot._waypoints):
         waypoint = robot._waypoints[waypoint_index]
-        print(waypoint_index)
+        print("waypoint index", waypoint_index)
+        print("waypoint coordinate", robot._current_waypoint)
         if uvc.is_listening():
             uvc._write_command('OSD','C','G','S','P','Y','D','T','I')
-            value = robot._track_waypoint(uvc, next_waypoint)
+            value = robot._track_waypoint(uvc, waypoint)
             print("Command wrote to track waypoint", value)
 
             uvc.run()
@@ -228,6 +253,7 @@ if __name__ == '__main__':
             time.sleep(SEND_RATE - (passed_time % SEND_RATE)) # send commands at a constant rate
 
         if robot._dist_to_waypoint < DIST_THRESH:
+            print(robot._dist_to_waypoint, "close enought")
             waypoint_index += 1
 
     if not uvc.is_closed():
