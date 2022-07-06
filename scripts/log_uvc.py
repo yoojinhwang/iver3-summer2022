@@ -10,6 +10,7 @@ import numpy as np
 if __name__ == '__main__':
     # Read in command line arguments: savepath to a file to dump data
     _, *rest = sys.argv
+    #rest = ['\Users\iver\Documents\iver3-summer2022\data\']
     knots_per_meter = 1.944
 
     # Define the column names of the data to be logged

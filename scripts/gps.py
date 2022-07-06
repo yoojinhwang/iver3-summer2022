@@ -88,6 +88,7 @@ class GPS(SerialDevice):
             return None
 
         degrees = longitude[:3]
+
         minutes = longitude[3:]
         longitude = float(degrees) + float(minutes) / 60
         if longitude_dir == 'W':
