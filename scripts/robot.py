@@ -183,7 +183,7 @@ class Robot():
             print("Yaw angle", yaw_angle)
 
             # send waypoint parameters
-            output = uvc_object._write_command('OMP','{}{}8080{}'.format(yaw_angle, yaw_angle, thrust), '00', '10')
+            output = uvc_object._write_command('OMP','{}{}808080'.format(yaw_angle, yaw_angle), '00', '10')
             return output
         return None
 
