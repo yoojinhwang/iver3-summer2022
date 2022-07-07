@@ -18,7 +18,8 @@ def reject_outliers(data, m=2):
     '''Remove datapoints more than m standard deviations away from the mean'''
     return data[abs(data - np.mean(data)) < m * np.std(data)]
 
-datapath = '../data/07-03-2022/070322_circle_around'
+#datapath = '../data/07-03-2022/070322_circle_around'
+datapath = '/Users/Declan/Desktop/HMC/AUV/iver3-summer2022/data/07-06-2022/BFS_PCONTROL_LINE_A_75_R_6_D_5'
 name = os.path.splitext(os.path.split(datapath)[1])[0]
 data = pd.read_csv(datapath)
 latitude = np.array(data['Latitude'])
@@ -32,10 +33,12 @@ x = x[~np.isnan(x)]
 y = y[~np.isnan(y)]
 
 cartesian_coords = []
-origin = np.array([34.106195, -117.712030])
-waypoint = np.array([34.106168, -117.712045])
+origin = np.array([34.109191, -117.712723])
+waypoints = np.array([[34.109191, -117.712723],
+                      [34.109096, -117.712535],
+                      [34.109191, -117.712723]])
 origin_cart = utils.to_cartesian(origin, origin)
-waypoint_cart = utils.to_cartesian(waypoint, origin)
+waypoints_cart = [utils.to_cartesian(waypoint, origin) for waypoint in waypoints]
 
 for i in range(0, len(x)):
     lat = x[i]
@@ -45,25 +48,10 @@ for i in range(0, len(x)):
 x = [coord[0] for coord in cartesian_coords]
 y = [coord[1] for coord in cartesian_coords]
 
-plt.plot(x[0], y[0], marker='o', color='blue', label='Start')
-plt.plot(x[-1], y[-1], marker='o', color='red', label='End')
-plt.plot(origin_cart[0], origin_cart[1], marker='o', color = 'green', label = 'Origin')
-plt.plot(waypoint_cart[0], waypoint_cart[1],marker='o', color = 'black',label = 'Waypoint')
+x_way = [coord[0] for coord in waypoints_cart]
+y_way = [coord[1] for coord in waypoints_cart]
 
-plt.scatter(x=x, y = y)
-plt.title("Cartesian Coordinate Plot")
-plt.xlabel("X (m)")
-plt.ylabel("Y (m)")
-plt.legend()
-fig = plt.gcf()
-savepath = utils.get_savepath(datapath, '_histogram', replace=replace)
-print('Saving to {}'.format(savepath))
-utils.savefig(fig, savepath)
-
-plt.show()
-
-# Plot controls
-
+## TIME STUFF
 # convert to seconds
 time = np.array(data['datetime'])
 time_object = [datetime.strptime(x, '%Y-%m-%d %H:%M:%S.%f') for x in time]
@@ -71,20 +59,44 @@ timedelta = time_object[0] - datetime(1900, 1, 1)
 seconds = timedelta.total_seconds() #time since epoch
 
 time_object = [((x-datetime(1900, 1, 1))- timedelta) for x in time_object]
-print(time_object)
+#print(time_object)
 
 time_total_seconds = [y.total_seconds() for y in time_object]
-print(time_total_seconds)
-print(type(time_total_seconds[0]))
+#print(time_total_seconds)
+#print(type(time_total_seconds[0]))
+## END TIME STUFF
 
-yaw = data['Yaw Control'].apply(int, base=16)
-thrust_control = np.array(data['Thrust Control'])
+plt.plot(x[0], y[0], marker='o', color='blue', label='Start')
+plt.plot(x[-1], y[-1], marker='o', color='red', label='End')
+plt.plot(origin_cart[0], origin_cart[1], marker='o', color = 'green', label = 'Origin')
+plt.plot(x_way, y_way ,marker='o', color = 'black',label = 'Waypoints')
 
-plt.plot(time_total_seconds, yaw)
-plt.xlabel("Seconds")
-plt.ylabel("Yaw Control Decimal Values (0 - 255)")
+
+for i in range(len(x)):
+    plt.scatter(x[i], y[i], color=plt.cm.RdYlBu(i))
+    #plt.scatter(x[i], y[i], cmap='gray')
+
+plt.title("Cartesian Coordinate Plot")
+plt.xlabel("X (m)")
+plt.ylabel("Y (m)")
+plt.legend()
+#fig = plt.gcf()
+#savepath = utils.get_savepath(datapath, '_histogram', replace=replace)
+#print('Saving to {}'.format(savepath))
+#utils.savefig(fig, savepath)
 
 plt.show()
+
+# Plot controls
+
+# yaw = data['Yaw Control'].apply(int, base=16)
+# thrust_control = np.array(data['Thrust Control'])
+
+# plt.plot(time_total_seconds, yaw)
+# plt.xlabel("Seconds")
+# plt.ylabel("Yaw Control Decimal Values (0 - 255)")
+
+# plt.show()
 
 # Plot gif for the robot moving at each time step overlay the robot vector on top
 

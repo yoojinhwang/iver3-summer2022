@@ -32,6 +32,8 @@ class UVC(SerialDevice):
         self._latitude = None
         self._longitude = None
         self._heading = None
+        self._pitch = None
+        self._roll = None
         self._depth = None
         self._x_speed = None
         self._y_speed = None
@@ -137,6 +139,8 @@ class UVC(SerialDevice):
 
     def _update_heading(self, contents):
         self._heading = contents['data']['heading']
+        self._pitch = contents['data']['pitch']
+        self._roll = contents['data']['roll']
     
     def _update_depth(self, contents):
         self._depth = contents['data']['depth']
@@ -150,6 +154,18 @@ class UVC(SerialDevice):
             return default
         else:
             return self._heading
+
+    def get_pitch(self, default=None):
+        if self.is_closed() or self._pitch is None:
+            return default
+        else:
+            return self._pitch
+    
+    def get_roll(self, default=None):
+        if self.is_closed() or self._roll is None:
+            return default
+        else:
+            return self._roll
     
     def get_depth(self, default=None):
         if self.is_closed() or self._depth is None:
