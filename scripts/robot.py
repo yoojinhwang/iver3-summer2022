@@ -8,12 +8,12 @@ import numpy as np
 from utils import to_cartesian
 norm = np.linalg.norm
 
-K_RHO = 6
+K_RHO = 3
 K_ALPHA = 75
-K_DEPTH = 1
+K_DEPTH = 0
 K_ROLL = 0
 DIST_THRESH = 5
-SEND_RATE = 0.5
+SEND_RATE = .5
 
 class Robot():
     '''
@@ -49,11 +49,12 @@ class Robot():
         self._yaw_control = 0
         self._dist_to_waypoint = 100
         self._latlon = np.array([0, 0])
-        self._gps = np.array([0,0])
+        self._gps = np.array([0, 0])
         self._speed = 0
         self._heading = 0
         self._pitch = 0
         self._roll = 0
+        self._depth = 0
 
     def _get_controls(self):
         '''Gets controls to go to the next waypoint'''
@@ -109,6 +110,7 @@ class Robot():
         print("raw gps", self._latlon[0], self._latlon[1])
         print("cartesian", self._gps)
         print("angles", self._heading, self._pitch, self._roll)
+        print("depth", self._depth)
         print("speed", self._speed)
 
 
@@ -150,20 +152,23 @@ class Robot():
         all_data_present = not any(datum == 0 for datum in robot_data)
 
         if all_data_present:
-
+            print("ALL DATA PRESENT")
             [thrust, yaw_angle, left_angle, right_angle] = self._get_controls()
-            thrust = uvc.to_hex(thrust)
-            yaw_angle = uvc.to_hex(yaw_angle)
-            left_angle = uvc.to_hex(left_angle)
-            right_angle = uvc.to_hex(right_angle)
+            thrust = uvc_object.to_hex(thrust)
+            yaw_angle = uvc_object.to_hex(yaw_angle)
+            left_angle = uvc_object.to_hex(left_angle)
+            right_angle = uvc_object.to_hex(right_angle)
 
             self._thrust_control = thrust
             self._yaw_control = yaw_angle
             print("Thrust P control", thrust)
             print("Yaw angle", yaw_angle)
+            print("left angle", left_angle)
+            print("right angle", right_angle)
 
             # send waypoint parameters
-            output = uvc_object._write_command('OMP','{}{}{}{}{}'.format(yaw_angle, yaw_angle, left_angle, right_angle, thrust), '00', '10')
+            output = uvc_object._write_command('OMP','{}{}{}{}{}'.format(yaw_angle, yaw_angle, left_angle, right_angle, thrust), '00', '78')
+            
             return output
         return None
 
@@ -210,20 +215,29 @@ if __name__ == '__main__':
     start_time = time.time()
 
     while robot._waypoint_index < len(robot._waypoints):
+        print("starting while loop")
         waypoint = robot._waypoints[robot._waypoint_index]
         robot._current_waypoint = waypoint
         print("waypoint index", robot._waypoint_index)
         print("waypoint coordinate", waypoint)
         if uvc.is_listening():
+            #time.sleep(0.1)
             uvc._write_command('OSD','C','G','S','P','Y','D','T','I') # request data
+            #time.sleep(0.1)
             value = robot._track_waypoint(uvc)
             print("Command wrote to track waypoint", value)
 
             uvc.run()
             
             passed_time = time.time() - start_time
-            time.sleep(SEND_RATE - (passed_time % SEND_RATE)) # send commands at a constant rate
 
+            before_time = time.time()
+            print("before sleep", before_time)
+            print("time", passed_time)
+            print("sleep time", SEND_RATE - (passed_time % SEND_RATE))
+            time.sleep(SEND_RATE - (passed_time % SEND_RATE)) # send commands at a constant rate
+            print("done sleeping")
+            print("after sleep", time.time()-before_time)
         if robot._dist_to_waypoint < DIST_THRESH: # move on to next waypoint
             print(robot._dist_to_waypoint, "close enough")
             robot._waypoint_index += 1
