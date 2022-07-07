@@ -11,7 +11,7 @@ norm = np.linalg.norm
 K_RHO = 6
 K_ALPHA = 75
 K_DEPTH = 1
-K_ROLL = 1
+K_ROLL = 0
 DIST_THRESH = 5
 SEND_RATE = 0.5
 
@@ -97,24 +97,19 @@ class Robot():
         pitch = uvc.get_pitch(default='')
         roll = uvc.get_roll(default='')
 
-        uvc_data = [lat, lon, x_speed, y_speed, heading, pitch, roll]
-        all_data_present = not any(datum == '' for datum in uvc_data)
+        self._latlon = np.array([lat, lon]) if lat != '' and lon != '' else self._latlon
+        coords_cart = to_cartesian(self._latlon, self._origin)
+        self._gps = np.asarray(coords_cart)
+        self._speed = np.sqrt(x_speed**2 + y_speed**2) * knots_per_meter if x_speed != '' and y_speed != '' else self._speed
+        self._heading = heading if heading != '' else self._heading
+        self._pitch = pitch if pitch != '' else self._pitch
+        self._roll = roll if roll != '' else self._roll
 
-        # update robot states
-        if all_data_present:
-            print("got data")
-            speed = np.sqrt(x_speed**2 + y_speed**2) * knots_per_meter
-            coords_cart = to_cartesian(np.array([lat, lon]), self._origin)
-            self._gps = np.asarray(coords_cart)
-            self._heading = heading
-            self._pitch = pitch
-            self._roll = roll
-
-            # print for debugging
-            print("raw gps", lat, lon)
-            print("cartesian", coords_cart)
-            print("angles", heading, pitch, roll)
-            print("speed", speed)
+        # print for debugging
+        print("raw gps", self._latlon[0], self._latlon[1])
+        print("cartesian", self._gps)
+        print("angles", self._heading, self._pitch, self._roll)
+        print("speed", self._speed)
 
 
     def _log_data(self):
