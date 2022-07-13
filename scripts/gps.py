@@ -146,7 +146,7 @@ class GPS(SerialDevice):
         self._register('on_coords', callback)
 
 if __name__ == '__main__':
-    gps = GPS('COM4', verbosity=2)
+    gps = GPS('COM5', verbosity=2)
 
     def coords_callback(coords, timestamp, **_):
         print('{}: Latitude={}, Longitude={}'.format(timestamp, coords[0], coords[1]))
