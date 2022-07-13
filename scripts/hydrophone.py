@@ -265,7 +265,6 @@ class Hydrophone(SerialDevice):
                     data_dict['signal_level'] = float(data[3])
                     data_dict['noise_level'] = float(data[4])
                     data_dict['channel'] = int(data[5])
-                    # raise ValueError('I haven\'t implemented sensor tags sorry :(')
 
             contents['data'] = data_dict
         return contents
@@ -305,7 +304,7 @@ class Hydrophone(SerialDevice):
         contents = self._parse_line(line)
 
         # Process the line further if it is a detection line
-        if contents['type'] == 'output' and contents['data']['type'] == 'pinger':
+        if contents['type'] == 'output' and contents['data']['type'] in ['pinger', 'sensor']:
             tag_id = contents['data']['id']
             detection_time = contents['datetime']
 
