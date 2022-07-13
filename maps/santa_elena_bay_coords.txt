@@ -1,0 +1,5 @@
+bounds:
+north west corner: 10.940108, -85.824533
+south east corner: 10.905594, -85.771067
+
+west, south, east, north = (-85.824533, 10.905594, -85.771067, 10.940108)
