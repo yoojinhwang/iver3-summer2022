@@ -34,8 +34,11 @@ def plot_df(pf, groundtruth_path_data, save_to=None, plot_avg=True, msg = '', bb
 
     hydrophone1, = ax.plot([], [], linestyle='None', marker='o', label='hydrophone 1')
     hydrophone2, = ax.plot([], [], linestyle='None', marker='o', label='hydrophone 2')
-    hydrophone1_range, = ax.plot([], [])
-    hydrophone2_range, = ax.plot([], [])
+    hydrophone1_range = mpl.patches.Circle((0, 0), 0, fill=False, linewidth=10)
+    hydrophone2_range = mpl.patches.Circle((0, 0), 0, fill=False, linewidth=10)
+
+    ax.add_patch(hydrophone1_range)
+    ax.add_patch(hydrophone2_range)
 
     steps = ax.text(3, 6, "Step = 0 / " + str(num_steps), horizontalalignment="center", verticalalignment="top")
     ax.legend()
@@ -150,8 +153,7 @@ def plot_df(pf, groundtruth_path_data, save_to=None, plot_avg=True, msg = '', bb
         anim.save(f, writer=writergif)
         print('Animation Saved!')
 
-def ring_coords(center, inner, outer, cos=None, sin=None):
-    if cos is None or sin is None:
-        theta = np.linspace(-np.pi, np.pi, 100)
-        cos = np.cos(theta)
-        sin = np.sin(theta)
+def data_to_axis_units(x_data, fig, ax):
+    ppd = 72 / fig.dpi
+    trans = ax.transData.transform
+    return ((trans((1, x_data)) - trans((0, 0))) * ppd)[1]
