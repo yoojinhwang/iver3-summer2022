@@ -20,10 +20,14 @@ speed_of_sound = 1460
 # tag_coords = (34.109179, -117.712774)
 
 # 06-29-2022 BFS buoy location
-tag_coords = (34.1090865, -117.712575)
+# tag_coords = (34.1090865, -117.712575)
 
-targetpath = '../data/06-29-2022/tag78_cowling_small_snail_BFS_test_457012_0.csv'
-sourcepath = '../data/06-29-2022/tag78_cowling_small_snail_BFS_test_uvc_log_0.csv'
+# 07-13-2022 Santa Elena Bay
+tag_coords = (10.932408333333331,-85.79003716666666)
+
+targetpath = '../data/07-13-2022/santa_elena_bay_coords.csv'
+sourcepath = None
+# sourcepath = '../data/06-29-2022/tag78_cowling_small_snail_BFS_test_uvc_log_0.csv'
 
 # 06-01-2022/50m_increment_2
 # sourcepath = r'../data\06-01-2022\20220601-155249-CH_Long_Beach_Mission_05_31_2022-IVER3-3013\Logs\20220601-155325--CH_Long_Beach_Mission_05_31_2022-IVER3-3013.log'

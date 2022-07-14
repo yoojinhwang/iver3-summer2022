@@ -21,69 +21,13 @@ datapath = '../data/07-13-2022/santa_elena_bay_coords.csv'
 # datapath = '/Users/Declan/Desktop/HMC/AUV/iver3-summer2022/data/06-30-2022/test_circle_around.csv'
 name = os.path.splitext(os.path.split(datapath)[1])[0]
 data = pd.read_csv(datapath)
-latitude = np.array(data['Latitude'])
-longitude = np.array(data['Longitude'])
-# distances = np.array(data['total_distance'])
-# times = np.array(data['total_dt'])
-# signal = np.array(data['signal_level'])
+latitude = np.array(data['latitude'])
+longitude = np.array(data['longitude'])
+distances = np.array(data['total_distance'])
+times = np.array(data['total_dt'])
+signal = np.array(data['signal_level'])
 # dt = np.diff(times[~np.isnan(times)])
 # n = np.round(dt / np.min(dt))
-
-x, y = np.array(data['Latitude']), np.array(data['Longitude'])
-x = x[~np.isnan(x)]
-y = y[~np.isnan(y)]
-
-#print(x)
-#print(y)
-
-cartesian_coords = []
-#origin = np.array([34.1064, -117.7125])
-origin = np.array([34.106129, -117.713168])
-
-coords = np.array([x[1], y[1]])
-ref = origin
-
-
-R = 6371009
-coords = np.radians(coords)
-ref = np.radians(ref)
-delta_x = R * (coords[1] - ref[1]) * np.cos(ref[0])
-
-print(coords[1] - ref[1])
-print(ref[1])
-
-
-for i in range(0, len(x)):
-    lat = x[i]
-    lon = y[i]
-    cartesian_coords.append(utils.to_cartesian(np.array([lat, lon]), origin))
-
-#y = cartesian_coords[:,0]
-#x = cartesian_coords[:,1]
-x = [coord[0] for coord in cartesian_coords]
-y = [coord[1] for coord in cartesian_coords]
-
-plt.plot(x[0], y[0], marker='o', color='blue', label='Start')
-plt.plot(x[-1], y[-1], marker='o', color='red', label='End')
-
-plt.scatter(x=x, y = y)
-plt.title("GPS Coordinate Plots")
-#plt.xlabel("Latitude")
-#plt.ylabel("Longitude")
-plt.xlabel("x (m)")
-plt.ylabel("y (m)")
-plt.legend()
-#fig = plt.gcf()
-#savepath = utils.get_savepath(datapath, '_histogram', replace=replace)
-#print('Saving to {}'.format(savepath))
-#utils.savefig(fig, savepath)
-
-plt.show()
-
-# plt.plot(x[0], y[0], marker='o', color='blue', label='Start')
-# plt.plot(x[-1], y[-1], marker='o', color='red', label='End')
-# plt.plot([0], [0], marker='o', color='#ff7f0e', label='Tag')
-# plt.show()
 
 # # Plot a histogram of times between tag detections
 # normed_dt = reject_outliers(dt / n)
@@ -100,28 +44,28 @@ plt.show()
 # utils.savefig(fig, savepath)
 
 # Plot trajectory
-# if 'Latitude' in data.columns and 'Longitude' in data.columns:
-#     x, y = np.array(data['Latitude']), np.array(data['Longitude'])
-#     x = x[~np.isnan(x)]
-#     y = y[~np.isnan(y)]
-#     dx = np.concatenate([np.diff(x), [0]])
-#     dy = np.concatenate([np.diff(y), [0]])
+if 'x' in data.columns and 'y' in data.columns:
+    x, y = np.array(data['x']), np.array(data['y'])
+    x = x[~np.isnan(x)]
+    y = y[~np.isnan(y)]
+    dx = np.concatenate([np.diff(x), [0]])
+    dy = np.concatenate([np.diff(y), [0]])
     
-#     plt.quiver(x, y, dx, dy, label='Hydrophone trajectory', facecolor='#1f77b4', units='xy', angles='xy', scale_units='xy', scale=1)
-#     # plt.plot(data['x'], data['y'], marker='.', label='Hydrophone trajectory')
-#     plt.plot(x[0], y[0], marker='o', color='blue', label='Start')
-#     plt.plot(x[-1], y[-1], marker='o', color='red', label='End')
-#     plt.plot([0], [0], marker='o', color='#ff7f0e', label='Tag')
-#     plt.xlabel('East (m)')
-#     plt.ylabel('North (m)')
-#     plt.legend()
-#     plt.suptitle('{} trajectory'.format(name))
-#     fig = plt.gcf()
-#     plt.show()
+    plt.quiver(x, y, dx, dy, label='Hydrophone trajectory', facecolor='#1f77b4', units='xy', angles='xy', scale_units='xy', scale=1)
+    # plt.plot(data['x'], data['y'], marker='.', label='Hydrophone trajectory')
+    plt.plot(x[0], y[0], marker='o', color='blue', label='Start')
+    plt.plot(x[-1], y[-1], marker='o', color='red', label='End')
+    plt.plot([0], [0], marker='o', color='#ff7f0e', label='Tag')
+    plt.xlabel('East (m)')
+    plt.ylabel('North (m)')
+    plt.legend()
+    plt.suptitle('{} trajectory'.format(name))
+    fig = plt.gcf()
+    plt.show()
 
-#     savepath = utils.get_savepath(datapath, '_trajectory', replace=replace)
-#     print('Saving to {}'.format(savepath))
-#     utils.savefig(fig, savepath)
+    savepath = utils.get_savepath(datapath, '_trajectory', replace=replace)
+    print('Saving to {}'.format(savepath))
+    utils.savefig(fig, savepath)
 
 # # Plot distances
 # plt.plot(times, distances, label='TOF distance', marker='.')
