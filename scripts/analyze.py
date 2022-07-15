@@ -15,33 +15,28 @@ def reject_outliers(data, m=2):
     '''Remove datapoints more than m standard deviations away from the mean'''
     return data[abs(data - np.mean(data)) < m * np.std(data)]
 
-datapath = '../data/07-13-2022/santa_elena_bay_coords.csv'
-# datapath = '../data/06-29-2022/tag78_cowling_small_snail_BFS_test_457012_0.csv'
-# datapath = '../data/06-30-2022/test_circle_around.csv'
-# datapath = '/Users/Declan/Desktop/HMC/AUV/iver3-summer2022/data/06-30-2022/test_circle_around.csv'
+datapath = '../data/06-27-2022/tag78_overnight_test_457049_0.csv'
 name = os.path.splitext(os.path.split(datapath)[1])[0]
 data = pd.read_csv(datapath)
-latitude = np.array(data['latitude'])
-longitude = np.array(data['longitude'])
 distances = np.array(data['total_distance'])
 times = np.array(data['total_dt'])
 signal = np.array(data['signal_level'])
-# dt = np.diff(times[~np.isnan(times)])
-# n = np.round(dt / np.min(dt))
+dt = np.diff(times[~np.isnan(times)])
+n = np.round(dt / np.min(dt))
 
-# # Plot a histogram of times between tag detections
-# normed_dt = reject_outliers(dt / n)
-# dt_mu, dt_std = np.mean(normed_dt), np.std(normed_dt)
-# x = np.linspace(np.min(normed_dt), np.max(normed_dt), 1001)
-# plt.hist(normed_dt, density=True)
-# plt.plot(x, gaussian(x, dt_mu, dt_std), label='N(mu={:.8f}, std={:.8f})'.format(dt_mu, dt_std))
-# plt.legend()
-# fig = plt.gcf()
-# plt.show()
+# Plot a histogram of times between tag detections
+normed_dt = reject_outliers(dt / n)
+dt_mu, dt_std = np.mean(normed_dt), np.std(normed_dt)
+x = np.linspace(np.min(normed_dt), np.max(normed_dt), 1001)
+plt.hist(normed_dt, density=True)
+plt.plot(x, gaussian(x, dt_mu, dt_std), label='N(mu={:.8f}, std={:.8f})'.format(dt_mu, dt_std))
+plt.legend()
+fig = plt.gcf()
+plt.show()
 
-# savepath = utils.get_savepath(datapath, '_histogram', replace=replace)
-# print('Saving to {}'.format(savepath))
-# utils.savefig(fig, savepath)
+savepath = utils.get_savepath(datapath, '_histogram', replace=replace)
+print('Saving to {}'.format(savepath))
+utils.savefig(fig, savepath)
 
 # Plot trajectory
 if 'x' in data.columns and 'y' in data.columns:
@@ -67,69 +62,56 @@ if 'x' in data.columns and 'y' in data.columns:
     print('Saving to {}'.format(savepath))
     utils.savefig(fig, savepath)
 
-# # Plot distances
-# plt.plot(times, distances, label='TOF distance', marker='.')
-# if 'absolute_distance' in data.columns:
-#     plt.plot(times, data['absolute_distance'], label='Absolute TOF distance', marker='.')
-# if 'gps_distance' in data.columns:
-#     plt.plot(times, data['gps_distance'], label='GPS distance')
-# plt.xlabel('Time (s)')
-# plt.ylabel('Distance (m)')
-# plt.legend()
-# plt.suptitle('{} distance'.format(name))
-# fig = plt.gcf()
-# plt.show()
-
-# savepath = utils.get_savepath(datapath, '_distance', replace=replace)
-# print('Saving to {}'.format(savepath))
-# utils.savefig(fig, savepath)
-
-# # Plot speeds
-# if 'gps_speed' in data.columns:
-#     plt.plot(times, data['gps_speed'], label='GPS speed', marker='.')
-#     if 'logged_speed' in data.columns:
-#         plt.plot(times, data['logged_speed'], label='Logged speed', marker='.')
-#     plt.xlabel('Time (s)')
-#     plt.ylabel('Speed (m/s)')
-#     plt.legend()
-#     plt.suptitle('{} speed'.format(name))
-#     fig = plt.gcf()
-#     plt.show()
-
-#     savepath = utils.get_savepath(datapath, '_speed', replace=replace)
-#     print('Saving to {}'.format(savepath))
-#     utils.savefig(fig, savepath)
-
-# # Plot robot heading and bearing to tag
-# if 'gps_heading' in data.columns:
-#     plt.plot(times, utils.wrap_to_180(np.degrees(data['gps_heading'])), label='Hydrophone heading (relative to east)', marker='.')
-# if 'logged_heading' in data.columns:
-#     plt.plot(times, utils.wrap_to_180(np.degrees(utils.convert_heading(data['logged_heading']))), label='Logged robot heading (relative to east)', marker='.')
-# if 'tag_bearing' in data.columns:
-#     plt.plot(times, utils.wrap_to_180(np.degrees(data['tag_bearing'])), label='Tag bearing (relative to east)', marker='.')
-# if 'relative_tag_bearing' in data.columns:
-#     plt.plot(times, utils.wrap_to_180(np.degrees(data['relative_tag_bearing'])), label='Tag bearing (relative to robot heading)', marker='.')
-# plt.xlabel('Time (s)')
-# plt.ylabel('Angle (deg)')
-# plt.legend()
-# plt.suptitle('{} direction'.format(name))
-# fig = plt.gcf()
-# plt.show()
-
-# savepath = utils.get_savepath(datapath, '_direction', replace=replace)
-# print('Saving to {}'.format(savepath))
-# utils.savefig(fig, savepath)
-
-# Plot signal level vs angle
-plt.scatter(data['relative_tag_bearing'], data['signal_level'], label='Relative tag bearing')
-plt.scatter(utils.convert_heading(data['logged_heading']), data['signal_level'], label='Compass heading (from east)')
-plt.xlabel('Angle (rad)')
-plt.ylabel('Signal level (dB)')
+# Plot distances
+plt.plot(times, distances, label='TOF distance', marker='.')
+if 'absolute_distance' in data.columns:
+    plt.plot(times, data['absolute_distance'], label='Absolute TOF distance', marker='.')
+if 'gps_distance' in data.columns:
+    plt.plot(times, data['gps_distance'], label='GPS distance')
+plt.xlabel('Time (s)')
+plt.ylabel('Distance (m)')
 plt.legend()
-plt.suptitle('{} signal level vs angle'.format(name))
+plt.suptitle('{} distance'.format(name))
 fig = plt.gcf()
 plt.show()
-savepath = utils.get_savepath(datapath, '_signal_vs_angle', replace=replace)
+
+savepath = utils.get_savepath(datapath, '_distance', replace=replace)
+print('Saving to {}'.format(savepath))
+utils.savefig(fig, savepath)
+
+# Plot speeds
+if 'gps_speed' in data.columns:
+    plt.plot(times, data['gps_speed'], label='GPS speed', marker='.')
+    if 'logged_speed' in data.columns:
+        plt.plot(times, data['logged_speed'], label='Logged speed', marker='.')
+    plt.xlabel('Time (s)')
+    plt.ylabel('Speed (m/s)')
+    plt.legend()
+    plt.suptitle('{} speed'.format(name))
+    fig = plt.gcf()
+    plt.show()
+
+    savepath = utils.get_savepath(datapath, '_speed', replace=replace)
+    print('Saving to {}'.format(savepath))
+    utils.savefig(fig, savepath)
+
+# Plot robot heading and bearing to tag
+if 'gps_heading' in data.columns:
+    plt.plot(times, utils.wrap_to_180(np.degrees(data['gps_heading'])), label='Hydrophone heading (relative to east)', marker='.')
+if 'logged_heading' in data.columns:
+    plt.plot(times, utils.wrap_to_180(np.degrees(utils.convert_heading(data['logged_heading']))), label='Logged robot heading (relative to east)', marker='.')
+if 'tag_bearing' in data.columns:
+    plt.plot(times, utils.wrap_to_180(np.degrees(data['tag_bearing'])), label='Tag bearing (relative to east)', marker='.')
+if 'relative_tag_bearing' in data.columns:
+    plt.plot(times, utils.wrap_to_180(np.degrees(data['relative_tag_bearing'])), label='Tag bearing (relative to robot heading)', marker='.')
+plt.xlabel('Time (s)')
+plt.ylabel('Angle (deg)')
+plt.legend()
+plt.suptitle('{} direction'.format(name))
+fig = plt.gcf()
+plt.show()
+
+savepath = utils.get_savepath(datapath, '_direction', replace=replace)
 print('Saving to {}'.format(savepath))
 utils.savefig(fig, savepath)
 
