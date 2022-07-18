@@ -3,7 +3,15 @@ import numpy as np
 import re
 import itertools
 from functools import partial
+import mercantile as mt
+import contextily as ctx
+import requests
+import io
+from PIL import Image
+import uuid
 
+EARTH_RADIUS = 6371009  # Radius of the earth in meters
+USER_AGENT = "contextily-" + uuid.uuid4().hex
 avg_dt_dict = {65477: 8.179110, 65478: 8.179071, 65479: 7.958926}
 
 def find_files(*sources, name=None, extension=None):
@@ -173,17 +181,30 @@ def to_cartesian(coords, ref):
     Gives the x and y difference (in meters) from the given reference coordinates to the first set of coordinates.
     x is aligned to north, y is aligned to east
     '''
-    R = 6371009  # Radius of the earth in meters
     coords = np.radians(coords)
     ref = np.radians(ref)
 
     # Formula, where lat1, lon1 = ref and lat2, lon2 = coords
-    # delta_x = R * (lon2 - lon1) * np.cos(lat1)
-    # delta_y = R * (lat2 - lat1)
+    # delta_x = EARTH_RADIUS * (lon2 - lon1) * np.cos(lat1)
+    # delta_y = EARTH_RADIUS * (lat2 - lat1)
 
-    delta_x = R * (coords[1] - ref[1]) * np.cos(ref[0])
-    delta_y = R * (coords[0] - ref[0])
+    delta_x = EARTH_RADIUS * (coords[1] - ref[1]) * np.cos(ref[0])
+    delta_y = EARTH_RADIUS * (coords[0] - ref[0])
     return np.array([delta_x, delta_y]).T
+
+def to_coords(point, ref):
+    '''
+    Gives the coordinates of the cartesian point using the reference coordinates as the origin.
+    '''
+    ref = np.radians(ref)
+
+    # Formula, where dx, dy = point and lat, lon = ref
+    # latitude = dy / EARTH_RADIUS + lat
+    # longitude = dx / np.cos(lat) + lon
+
+    latitude = point[1] / EARTH_RADIUS + ref[0]
+    longitude = point[0] / (EARTH_RADIUS * np.cos(ref[0])) + ref[1]
+    return np.degrees([latitude, longitude]).T
 
 # def angle_between(ref, vec):
 #     '''
@@ -315,3 +336,116 @@ def apply_along_axes(func, axes, arr, *args, **kwargs):
     reshape = partial(np.reshape, newshape=s[axes[0]:axes[1]])
     func1d = lambda x: func(reshape(x))
     return np.apply_along_axis(func1d, axes[0], combine_axes(arr, axes), *args, **kwargs)
+
+def pad_bounds(bounds, f=1):
+    (min_x, min_y), (max_x, max_y) = bounds
+    mid_x = (max_x + min_x) / 2
+    mid_y = (max_y + min_y) / 2
+    range_x = (max_x - min_x) * f
+    range_y = (max_y - min_y) * f
+    min_x = mid_x - range_x / 2
+    max_x = mid_x + range_x / 2
+    min_y = mid_y - range_y / 2
+    max_y = mid_y + range_y / 2
+    return np.array([[min_x, min_y], [max_x, max_y]])
+
+def bounds2img(west, south, east, north, zoom=None, map_dir=None, force_download=False):
+    # Compute zoom automatically if it is not given
+    if zoom is None:
+        lon_length = np.abs(east - west)
+        lat_length = np.abs(north - south)
+        zoom_lon = np.ceil(np.log2(360 * 2.0 / lon_length))
+        zoom_lat = np.ceil(np.log2(360 * 2.0 / lat_length))
+        zoom = int(np.max([zoom_lon, zoom_lat]))
+    print('Zoom={}'.format(zoom))
+    
+    # Retrieve the x and y positions of each tile
+    tiles = list(mt.tiles(west, south, east, north, zoom))
+    print('Num tiles={}'.format(len(tiles)))
+
+    # The OpenStreetMap tile servers do not allow downloading more than 250 map tiles at once
+    if len(tiles) > 250:
+        raise Exception('Too many map tiles')
+
+    def download_tile(x, y, z):
+        url = ctx.providers.OpenStreetMap.Mapnik.build_url(x=x, y=y, z=z)
+        print('Downloading tile from {} --- '.format(url), end='')
+        request = requests.get(url, headers={'user-agent': USER_AGENT})
+        if request.status_code != 404:
+            print('succeeded')
+            image_stream = io.BytesIO(request.content)
+            tile_image = Image.open(image_stream)
+            return tile_image
+        else:
+            print('failed')
+            return None
+
+    # Retrieve each tile
+    tile_images = []
+    for t in tiles:
+        tile_image = None
+
+        # If possible, use a local copy of the map tile
+        if map_dir is not None:
+            mkdir(map_dir)
+            tile_path = os.path.normpath(os.path.join(map_dir, '{z}_{x}_{y}.png'.format(x=t.x, y=t.y, z=zoom)))
+            print('Retrieving tile from {} --- '.format(tile_path), end='')
+
+            # Look for the file
+            cached = os.path.isfile(tile_path)
+            if cached and not force_download:
+                print('succeeded')
+                tile_image = Image.open(tile_path)
+
+            # If its not found, attempt to download it
+            else:
+                print('failed')
+                # print('Tile not found locally, attempting to download it')
+                tile_image = download_tile(t.x, t.y, zoom)
+
+            # Save map tile locally
+            if tile_image is not None and not cached:
+                print('Saving map tile locally')
+                tile_image.save(tile_path)
+
+        # Otherwise try downloading it
+        else:
+            tile_image = download_tile(t.x, t.y, zoom)
+        
+        # Add the tile to the array of tiles
+        if tile_image is not None:
+            tile_images.append(np.asarray(tile_image.convert('RGBA')))
+
+    if len(tile_images) != 0:
+        # Merge the tile images into a single numpy array
+        # Code from contextily _merge_tiles function:
+        tile_xys = np.array([(t.x, t.y) for t in tiles])
+
+        # get indices starting at zero
+        indices = tile_xys - tile_xys.min(axis=0)
+
+        # the shape of individual tile images
+        h, w, d = tile_images[0].shape
+
+        # number of rows and columns in the merged tile
+        n_x, n_y = (indices + 1).max(axis=0)
+
+        # empty merged tiles array to be filled in
+        img = np.zeros((h * n_y, w * n_x, d), dtype=np.uint8)
+
+        for ind, arr in zip(indices, tile_images):
+            x, y = ind
+            img[y * h : (y + 1) * h, x * w : (x + 1) * w, :] = arr
+
+        bounds = np.array([mt.bounds(t) for t in tiles])
+        west, south, east, north = (
+            min(bounds[:, 0]),
+            min(bounds[:, 1]),
+            max(bounds[:, 2]),
+            max(bounds[:, 3]),
+        )
+
+        return img, (west, east, south, north)
+    else:
+        print('Could not download or find any map tiles locally.')
+        return np.array([[]]), (0, 0, 0, 0)

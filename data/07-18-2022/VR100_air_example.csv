@@ -1,0 +1,4 @@
+Date,Time,Chan,Freq (kHz),Type,Code Space,ID,S/N,Data1,Units1,Slope1,Int1,Data2,Units2,Slope2,Int2,Signal (dB),Gain Mode,Gain (dB),Latitude,Longitude,Comment
+2022-07-18,13:57:46.318,1,69,Coded Pinger,A69-1602,65477,,,,,,,,,,61,Manual,6,10.94714,-85.69290,
+2022-07-18,13:57:38.138,1,69,Coded Pinger,A69-1602,65477,,,,,,,,,,62,Manual,6,10.94716,-85.69291,
+2022-07-18,13:57:29.960,1,69,Coded Pinger,A69-1602,65477,,,,,,,,,,62,Manual,6,10.94716,-85.69292,

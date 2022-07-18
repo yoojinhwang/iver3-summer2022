@@ -25,7 +25,10 @@ speed_of_sound = 1460
 # 07-13-2022 Santa Elena Bay
 tag_coords = (10.932408333333331,-85.79003716666666)
 
-targetpath = '../data/07-13-2022/santa_elena_bay_coords.csv'
+# 07-15-2022 Snorkeling coords
+tag_coords = (10.937428333333331,-85.73271633333333)
+
+targetpath = '../data/07-15-2022/snorkeling_and_return_coords.csv'
 sourcepath = None
 # sourcepath = '../data/06-29-2022/tag78_cowling_small_snail_BFS_test_uvc_log_0.csv'
 
