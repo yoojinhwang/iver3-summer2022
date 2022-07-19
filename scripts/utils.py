@@ -12,6 +12,7 @@ import uuid
 
 EARTH_RADIUS = 6371009  # Radius of the earth in meters
 USER_AGENT = "contextily-" + uuid.uuid4().hex
+SPEED_OF_SOUND = 1460  # m/s in water
 avg_dt_dict = {65477: 8.179110, 65478: 8.179071, 65479: 7.958926}
 
 def find_files(*sources, name=None, extension=None):

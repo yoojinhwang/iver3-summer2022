@@ -23,12 +23,21 @@ speed_of_sound = 1460
 # tag_coords = (34.1090865, -117.712575)
 
 # 07-13-2022 Santa Elena Bay
-tag_coords = (10.932408333333331,-85.79003716666666)
+# tag_coords = (10.932408333333331,-85.79003716666666)
 
 # 07-15-2022 Snorkeling coords
-tag_coords = (10.937428333333331,-85.73271633333333)
+# tag_coords = (10.937428333333331,-85.73271633333333)
 
-targetpath = '../data/07-15-2022/snorkeling_and_return_coords.csv'
+# 07-18-2022 Santa Elena Bay tag buoy 0 coords
+# tag_coords = (10.92378733, -85.79437267)
+
+# 07-18-2022 Santa Elena Bay tag buoy 1 coords
+# tag_coords = (10.924123, -85.7945185)
+
+# 07-18-2022 Santa Elena swim starting point
+tag_coords = (10.922271274030209, -85.79158178530633)
+
+targetpath = '../data/07-18-2022/santa_elena_swim.csv'
 sourcepath = None
 # sourcepath = '../data/06-29-2022/tag78_cowling_small_snail_BFS_test_uvc_log_0.csv'
 
@@ -141,7 +150,7 @@ gps_distances = get_hydrophone_column('gps_distance')
 gps_distances_iter = utils.pairwise(gps_distances)
 gps_speeds = get_hydrophone_column('gps_speed')
 gps_delta_tof = get_hydrophone_column('gps_delta_tof')
-dts = np.array(hydrophone_data.get('dt', [0] + np.diff(hydrophone_data['total_dt']).tolist()))
+dts = np.array(hydrophone_data.get('dt', [0] + [dt.total_seconds() for dt in hydrophone_data['datetime'] - hydrophone_data['datetime'][0]]))
 for i, (current_gps_distance, next_gps_distance) in enumerate(gps_distances_iter):
     dt = dts[i]
     if not np.isnan(current_gps_distance) and not np.isnan(next_gps_distance) and dt != 0:

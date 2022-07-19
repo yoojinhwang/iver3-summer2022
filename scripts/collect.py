@@ -9,7 +9,7 @@ import csv
 
 if __name__ == '__main__':
     # How often to log GPS coordinates. If no detections are received, the GPS coordinates are logged with all tag-related fields blank.
-    GPS_RATE = 10  # seconds
+    GPS_RATE = 9  # seconds
     last_gps_time = None
 
     # Read in command line arguments: port, serial_no, savepath to a file to dump data

@@ -7,11 +7,10 @@ import os
 import contextily as ctx
 import mercantile as mt
 
-save = False
+save = True
 replace = True
 map_dir = '../maps/OpenStreetMap/Mapnik'
-# origin = (10.932408333333331, -85.79003716666666)
-origin = (33.7421588, -118.12206)
+origin = None
 
 def gaussian(x, mu=0, std=1):
     '''PDF for a 1D gaussian'''
@@ -21,10 +20,11 @@ def reject_outliers(data, m=2):
     '''Remove datapoints more than m standard deviations away from the mean'''
     return data[abs(data - np.mean(data)) < m * np.std(data)]
 
-datapath = '../data/06-08-2022/tag78_cowling_none_long_beach_test_457012_0.csv'
+# datapath = '../data/06-08-2022/tag78_cowling_none_long_beach_test_457012_0.csv'
 # datapath = '../data/06-27-2022/tag78_overnight_test_457049_0.csv'
 # datapath = '../data/07-13-2022/santa_elena_bay_coords.csv'
 # datapath = '../data/07-15-2022/snorkeling_and_return_coords.csv'
+datapath = '../data/07-18-2022/santa_elena_swim.csv'
 name = os.path.splitext(os.path.split(datapath)[1])[0]
 data = pd.read_csv(datapath)
 distances = np.array(data.get('total_distance', [np.nan] * len(data)))
@@ -79,7 +79,7 @@ if 'x' in data.columns and 'y' in data.columns:
     if origin is not None:
         coord_bounds = utils.to_coords(cartesian_bounds, origin)
         (south, west), (north, east) = coord_bounds
-        img, ext = utils.bounds2img(west, south, east, north, zoom=None, map_dir=map_dir)
+        img, ext = utils.bounds2img(west, south, east, north, zoom=17, map_dir=map_dir)
         true_ext = utils.to_cartesian(np.flip(np.array(ext).reshape(2, 2), axis=0), origin).T.flatten()
 
     plt.imshow(img, extent=true_ext)

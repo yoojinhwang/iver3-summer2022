@@ -1,0 +1,46 @@
+Time based on the VR100 / Phone
+
+VR100_10913_D2022.07.18T10.51.38
+17:22:39 / 11:22
+- Just having two hydrophones in the water and detecting the pings through VR100 and Chris' computer
+- Drifting not actively moving
+- At 0dB gain on the VR100
+- At 17:33 / 11:33 looks like we are at around 80m 
+- 17:36 / 11:36 120m 
+- 17:39 / 11:39 150m
+- 17:43 / 11:43 updated gain to 6dB
+- 17:45 / 11:45 updated gain to 18dB
+- 17:49 / 11:49 updated gain to 24dB 
+- 17:50 / 11:50 
+
+VR100_10913_D2022.07.18T12.22.15
+boat --100m---- float ---100m--- boat (in triangle formation)
+- Parallel to the beach (at the start)
+- Having the two hydrophones in the water and detecting pings through the VR100
+- Drifting 
+- Latitude and longitude: 10.92376, 85.79449 of the buoy 
+- Out of the water 1:03, in the water at 1:06PM at 0dB 
+- Times are from my phone
+- At 1:09, increased to 6dB 
+- At 1:10:50, increased to 12dB
+- 1:19PM (on my phone) is 19:19PM
+- Take hydrophone out at 1:21PM (phone)
+
+VR100_10913_D2022.07.18T12.52.20
+Configuration: VR100 is on a boat pulling the line, the boat is drifting. Declan is swimming around with pinger, other boat is following us
+- In the water hearing pings at 19:42:43, gain at 18dB
+- 19:45:32, gain at 30dB 
+
+VR100_10913_D2022.07.18T13.32.14
+Configuration: repeating the first test since Chris could not get any pings
+Declan in the water again swimming with the pinger
+- At 20:03:24, gain at 0dB and it is in the water
+- At 20:16:37, increased gain at 6dB
+- At 20:18, took hydrophone out of water
+- At 20:21:56, put the receiver back in the water, gain is still at 6dB
+- At 20:30:07, gain is at 12dB now 
+
+
+Equilateral Triangle 
+- Two boats and tag and everything is static (anchor boats) for around 20/30 minutes
+
