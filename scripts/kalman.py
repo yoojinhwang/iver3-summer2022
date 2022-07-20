@@ -202,7 +202,7 @@ class KalmanFilter(Filter):
         self._total_signal_error = total_signal_error
 
 if __name__ == '__main__':
-    datapath = '../data/06-08-2022/tag78_cowling_none_long_beach_test_457012_0.csv'
+    datapath = '../data/07-18-2022/.csv'
     data = pd.read_csv(datapath)
     data['datetime'] = pd.to_datetime(data['datetime'])
     groundtruth_state = np.column_stack([data['gps_distance'], data['gps_speed']])

@@ -1,0 +1,5 @@
+serial_no,line_counter,datetime,code_space,tag_id,sensor_adc,signal_level,noise_level,channel,latitude,longitude,total_dt,dt,delta_tof,delta_distance,total_distance
+,,2022-07-19 12:08:06.500451,,,,,,,10.924697333333333,-85.79532866666666,,,,,
+,,2022-07-19 12:08:15.507829,,,,,,,10.9247035,-85.79533716666667,,,,,
+,,2022-07-19 12:08:24.519301,,,,,,,10.9247095,-85.79535,,,,,
+,,2022-07-19 12:08:33.524014,,,,,,,10.924718,-85.79536083333333,,,,,

@@ -68,7 +68,7 @@ def fit_line(x, y):
     A = np.vstack([x, np.ones(len(x))]).T
     return np.linalg.lstsq(A, y, rcond=None)[0]
 
-def imerge(*its, enum=True):
+def imerge(*its, enum=False):
     '''Merge iterators end to end'''
     for i, it in enumerate(its):
         for el in it:
