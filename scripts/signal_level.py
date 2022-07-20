@@ -20,7 +20,7 @@ def scrollable_legend(fig, legend):
 
     fig.canvas.mpl_connect("scroll_event", func)
 
-replace = True
+replace = False
 save = True
 
 # Create new dataframe to hold merged data
@@ -31,7 +31,9 @@ tag_id = 65478
 
 # Loop through the files found
 files = utils.imerge(
-    utils.find_files('../data/06-27-2022', extension=r'\.csv'))
+    utils.find_files('../data/07-18-2022', name=r'tag78(?!_swimming)(?!_shore_2_boat_all_static_test_\w{5,6}_0).*VR100.*', extension=r'\.csv'))
+    # utils.find_files('../data/07-18-2022', name=r'tag78(?!_swimming).*', extension=r'\.csv'))
+    # utils.find_files('../data/06-29-2022', name=r'.*457012.*', extension=r'\.csv'))
     # utils.find_files('../data/06-08-2022', name=r'.*(?:increment|none).*457012_0'))
     # utils.find_files('../data/06-01-2022', name=r'.*457012.*'))
     # utils.find_files('../data/06-01-2022', name=r'.*manual.*'))
@@ -39,7 +41,7 @@ files = utils.imerge(
     # utils.find_files('../data/06-01-2022', extension=r'\.csv'))
     # utils.find_files('../data/05-31-2022', '../data/05-27-2022', extension=r'\.csv'))
     # utils.find_files('../../icex-lair-2021', name=r'data_[\d]+', extension=r'\.csv'))
-save_to = '../plots/06-27-2022'
+save_to = '../plots/07-18-2022'
 
 def get_df_column(df, name):
     return np.array(df.get(name, [np.nan] * len(df)))
@@ -102,8 +104,8 @@ data.set_index('source', inplace=True)
 
 fig, ax = plt.subplots()
 
-# # Fit a line to all of the data
-isnan = np.isnan(data['distance'])
+# Fit a line to all of the data
+isnan = np.logical_or(np.isnan(data['distance']), np.isnan(data['signal']))
 distances = np.array(data['distance'])[~isnan]
 signals = np.array(data['signal'])[~isnan]
 m, b = utils.fit_line(distances, signals)
@@ -116,7 +118,7 @@ for i in data.index.unique():
     # color = cmap(float(i) / len(lengths))
     source_data = data.loc[i]
     name = os.path.splitext(os.path.split(source_data['path'].iloc[0])[1])[0]
-    isnan = np.isnan(source_data['distance'])
+    isnan = np.logical_or(np.isnan(source_data['distance']), np.isnan(source_data['signal']))
     distance_subset = np.array(source_data['distance'])[~isnan]
     signal_subset = np.array(source_data['signal'])[~isnan]
     m, b = utils.fit_line(distance_subset, signal_subset)
@@ -159,11 +161,7 @@ plt.close()
 #     ['distance', 'bearing', 'gps_speed', 'logged_speed'],
 # ]
 column_sets = [
-    ['distance'],
-    ['distance', 'bearing'],
-    ['distance', 'gps_speed'],
-    ['distance', 'bearing', 'gps_speed'],
-    ['distance', 'bearing', 'gps_speed', 'logged_speed']
+    ['distance']
 ]
 for columns in column_sets:
     x = None
@@ -174,14 +172,26 @@ for columns in column_sets:
         else:
             path = source_data['path'].iloc[0]
             name = os.path.splitext(os.path.split(path)[1])[0]
-        explanatory_vars = source_data[columns].to_numpy()
-        isnan = np.apply_along_axis(np.logical_or.reduce, 1, np.isnan(explanatory_vars))
-        A = np.concatenate([explanatory_vars, np.ones([len(explanatory_vars), 1])], axis=1)
+
+        # Dependent variable
         signals = np.array(source_data['signal'])
+
+        # Explanatory variables
+        explanatory_vars = source_data[columns].to_numpy()
+
+        # Find nan values
+        isnan = np.apply_along_axis(
+            np.logical_or.reduce,
+            1,
+            np.concatenate([np.isnan(explanatory_vars), np.isnan(signals.reshape((-1, 1)))], axis=1))
+        
+        A = np.concatenate([explanatory_vars, np.ones([len(explanatory_vars), 1])], axis=1)
         if x is None:
             x = np.linalg.lstsq(A[~isnan], signals[~isnan], rcond=None)[0]
+        
         predicted_signals = A @ x
         diff = signals - predicted_signals
+
         r_sqr = 1 - np.var(diff[~isnan]) / np.var(signals[~isnan])
         error = np.sqrt(np.sum(np.square(diff[~isnan])))
 

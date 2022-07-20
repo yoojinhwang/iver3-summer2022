@@ -4,8 +4,13 @@ import matplotlib.pyplot as plt
 from datetime import datetime
 import utils
 import os
+import contextily as ctx
+import mercantile as mt
 
+save = True
 replace = True
+map_dir = '../maps/OpenStreetMap/Mapnik'
+origin = (10.9247035, -85.79533716666667)
 
 def gaussian(x, mu=0, std=1):
     '''PDF for a 1D gaussian'''
@@ -15,134 +20,138 @@ def reject_outliers(data, m=2):
     '''Remove datapoints more than m standard deviations away from the mean'''
     return data[abs(data - np.mean(data)) < m * np.std(data)]
 
-datapath = '../data/06-30-2022/test_circle_around.csv'
+# datapath = '../data/06-08-2022/tag78_cowling_none_long_beach_test_457012_0.csv'
+# datapath = '../data/06-27-2022/tag78_overnight_test_457049_0.csv'
+# datapath = '../data/07-13-2022/santa_elena_bay_coords.csv'
+# datapath = '../data/07-15-2022/snorkeling_and_return_coords.csv'
+datapath = '../data/07-19-2022/tag78_shore_2_boat_all_static_test_457049_0.csv'
 name = os.path.splitext(os.path.split(datapath)[1])[0]
 data = pd.read_csv(datapath)
-latitude = np.array(data['Latitude'])
-longitude = np.array(data['Longitude'])
-# distances = np.array(data['total_distance'])
-# times = np.array(data['total_dt'])
-# signal = np.array(data['signal_level'])
-# dt = np.diff(times[~np.isnan(times)])
-# n = np.round(dt / np.min(dt))
+distances = np.array(data.get('total_distance', [np.nan] * len(data)))
+times = np.array(data.get('total_dt', [np.nan] * len(data)))
+signal = np.array(data.get('signal_level', [np.nan] * len(data)))
 
-x, y = np.array(data['Latitude']), np.array(data['Longitude'])
-x = x[~np.isnan(x)]
-y = y[~np.isnan(y)]
+dt = np.diff(times[~np.isnan(times)])
+if len(dt) == 0:
+    print('All times are nan')
+    has_times = False
+else:
+    has_times = True
 
-print(x)
-print(y)
+if has_times:
+    n = np.round(dt / np.min(dt))
 
-plt.plot(x[0], y[0], marker='o', color='blue', label='Start')
-plt.plot(x[-1], y[-1], marker='o', color='red', label='End')
+# Plot a histogram of times between tag detections
+if has_times:
+    normed_dt = reject_outliers(dt / n)
+    if len(normed_dt) != 0:
+        dt_mu, dt_std = np.mean(normed_dt), np.std(normed_dt)
+        x = np.linspace(np.min(normed_dt), np.max(normed_dt), 1001)
+        plt.hist(normed_dt, density=True)
+        plt.plot(x, gaussian(x, dt_mu, dt_std), label='N(mu={:.8f}, std={:.8f})'.format(dt_mu, dt_std))
+        plt.legend()
+        fig = plt.gcf()
+        plt.show()
 
-plt.scatter(x=x, y = y)
-plt.title("GPS Coordinate Plots")
-plt.xlabel("Latitude")
-plt.ylabel("Longitude")
-plt.legend()
-fig = plt.gcf()
-savepath = utils.get_savepath(datapath, '_histogram', replace=replace)
-print('Saving to {}'.format(savepath))
-utils.savefig(fig, savepath)
-
-plt.show()
-
-# plt.plot(x[0], y[0], marker='o', color='blue', label='Start')
-# plt.plot(x[-1], y[-1], marker='o', color='red', label='End')
-# plt.plot([0], [0], marker='o', color='#ff7f0e', label='Tag')
-# plt.show()
-
-# # Plot a histogram of times between tag detections
-# normed_dt = reject_outliers(dt / n)
-# dt_mu, dt_std = np.mean(normed_dt), np.std(normed_dt)
-# x = np.linspace(np.min(normed_dt), np.max(normed_dt), 1001)
-# plt.hist(normed_dt, density=True)
-# plt.plot(x, gaussian(x, dt_mu, dt_std), label='N(mu={:.8f}, std={:.8f})'.format(dt_mu, dt_std))
-# plt.legend()
-# fig = plt.gcf()
-# plt.show()
-
-# savepath = utils.get_savepath(datapath, '_histogram', replace=replace)
-# print('Saving to {}'.format(savepath))
-# utils.savefig(fig, savepath)
+        if save:
+            savepath = utils.get_savepath(datapath, '_histogram', replace=replace)
+            print('Saving to {}'.format(savepath))
+            utils.savefig(fig, savepath)
 
 # Plot trajectory
-# if 'Latitude' in data.columns and 'Longitude' in data.columns:
-#     x, y = np.array(data['Latitude']), np.array(data['Longitude'])
-#     x = x[~np.isnan(x)]
-#     y = y[~np.isnan(y)]
-#     dx = np.concatenate([np.diff(x), [0]])
-#     dy = np.concatenate([np.diff(y), [0]])
+if 'x' in data.columns and 'y' in data.columns:
+    if origin is None and 'latitude' in data.columns and 'longitude' in data.columns:
+        origin = data['latitude'][0], data['longitude'][0]
+    x, y = np.array(data['x']), np.array(data['y'])
+    x = x[~np.isnan(x)]
+    y = y[~np.isnan(y)]
+    dx = np.concatenate([np.diff(x), [0]])
+    dy = np.concatenate([np.diff(y), [0]])
     
-#     plt.quiver(x, y, dx, dy, label='Hydrophone trajectory', facecolor='#1f77b4', units='xy', angles='xy', scale_units='xy', scale=1)
-#     # plt.plot(data['x'], data['y'], marker='.', label='Hydrophone trajectory')
-#     plt.plot(x[0], y[0], marker='o', color='blue', label='Start')
-#     plt.plot(x[-1], y[-1], marker='o', color='red', label='End')
-#     plt.plot([0], [0], marker='o', color='#ff7f0e', label='Tag')
-#     plt.xlabel('East (m)')
-#     plt.ylabel('North (m)')
-#     plt.legend()
-#     plt.suptitle('{} trajectory'.format(name))
-#     fig = plt.gcf()
-#     plt.show()
+    plt.quiver(x, y, dx, dy, label='Trajectory', facecolor='#1f77b4', units='xy', angles='xy', scale_units='xy', scale=1)
+    # plt.plot(data['x'], data['y'], marker='.', label='Hydrophone trajectory')
+    plt.plot(x[0], y[0], marker='o', color='blue', label='Start')
+    plt.plot(x[-1], y[-1], marker='o', color='red', label='End')
+    # plt.plot([0], [0], marker='o', color='#ff7f0e', label='Tag')
 
-#     savepath = utils.get_savepath(datapath, '_trajectory', replace=replace)
-#     print('Saving to {}'.format(savepath))
-#     utils.savefig(fig, savepath)
+    cartesian_bounds = np.array([plt.gca().get_xlim(), plt.gca().get_ylim()])
+    cartesian_bounds = utils.pad_bounds(cartesian_bounds.T, f=2).T
+    if origin is not None:
+        coord_bounds = utils.to_coords(cartesian_bounds, origin)
+        (south, west), (north, east) = coord_bounds
+        img, ext = utils.bounds2img(west, south, east, north, zoom=17, map_dir=map_dir)
+        true_ext = utils.to_cartesian(np.flip(np.array(ext).reshape(2, 2), axis=0), origin).T.flatten()
 
-# # Plot distances
-# plt.plot(times, distances, label='TOF distance', marker='.')
-# if 'absolute_distance' in data.columns:
-#     plt.plot(times, data['absolute_distance'], label='Absolute TOF distance', marker='.')
-# if 'gps_distance' in data.columns:
-#     plt.plot(times, data['gps_distance'], label='GPS distance')
-# plt.xlabel('Time (s)')
-# plt.ylabel('Distance (m)')
-# plt.legend()
-# plt.suptitle('{} distance'.format(name))
-# fig = plt.gcf()
-# plt.show()
+    plt.imshow(img, extent=true_ext)
+    plt.xlim(cartesian_bounds[0])
+    plt.ylim(cartesian_bounds[1])
+    plt.xlabel('East (m)')
+    plt.ylabel('North (m)')
+    plt.legend()
+    plt.suptitle('{} trajectory'.format(name))
+    fig = plt.gcf()
+    plt.show()
 
-# savepath = utils.get_savepath(datapath, '_distance', replace=replace)
-# print('Saving to {}'.format(savepath))
-# utils.savefig(fig, savepath)
+    if save:
+        savepath = utils.get_savepath(datapath, '_trajectory', replace=replace)
+        print('Saving to {}'.format(savepath))
+        utils.savefig(fig, savepath)
 
-# # Plot speeds
-# if 'gps_speed' in data.columns:
-#     plt.plot(times, data['gps_speed'], label='GPS speed', marker='.')
-#     if 'logged_speed' in data.columns:
-#         plt.plot(times, data['logged_speed'], label='Logged speed', marker='.')
-#     plt.xlabel('Time (s)')
-#     plt.ylabel('Speed (m/s)')
-#     plt.legend()
-#     plt.suptitle('{} speed'.format(name))
-#     fig = plt.gcf()
-#     plt.show()
+# Plot distances
+plt.plot(times, distances, label='TOF distance', marker='.')
+if 'absolute_distance' in data.columns:
+    plt.plot(times, data['absolute_distance'], label='Absolute TOF distance', marker='.')
+if 'gps_distance' in data.columns:
+    plt.plot(times, data['gps_distance'], label='GPS distance')
+plt.xlabel('Time (s)')
+plt.ylabel('Distance (m)')
+plt.legend()
+plt.suptitle('{} distance'.format(name))
+fig = plt.gcf()
+plt.show()
 
-#     savepath = utils.get_savepath(datapath, '_speed', replace=replace)
-#     print('Saving to {}'.format(savepath))
-#     utils.savefig(fig, savepath)
+if save:
+    savepath = utils.get_savepath(datapath, '_distance', replace=replace)
+    print('Saving to {}'.format(savepath))
+    utils.savefig(fig, savepath)
 
-# # Plot robot heading and bearing to tag
-# if 'gps_heading' in data.columns:
-#     plt.plot(times, utils.wrap_to_180(np.degrees(data['gps_heading'])), label='Hydrophone heading (relative to east)', marker='.')
-# if 'logged_heading' in data.columns:
-#     plt.plot(times, utils.wrap_to_180(np.degrees(utils.convert_heading(data['logged_heading']))), label='Logged robot heading (relative to east)', marker='.')
-# if 'tag_bearing' in data.columns:
-#     plt.plot(times, utils.wrap_to_180(np.degrees(data['tag_bearing'])), label='Tag bearing (relative to east)', marker='.')
-# if 'relative_tag_bearing' in data.columns:
-#     plt.plot(times, utils.wrap_to_180(np.degrees(data['relative_tag_bearing'])), label='Tag bearing (relative to robot heading)', marker='.')
-# plt.xlabel('Time (s)')
-# plt.ylabel('Angle (deg)')
-# plt.legend()
-# plt.suptitle('{} direction'.format(name))
-# fig = plt.gcf()
-# plt.show()
+# Plot speeds
+if 'gps_speed' in data.columns:
+    plt.plot(times, data['gps_speed'], label='GPS speed', marker='.')
+    if 'logged_speed' in data.columns:
+        plt.plot(times, data['logged_speed'], label='Logged speed', marker='.')
+    plt.xlabel('Time (s)')
+    plt.ylabel('Speed (m/s)')
+    plt.legend()
+    plt.suptitle('{} speed'.format(name))
+    fig = plt.gcf()
+    plt.show()
 
-# savepath = utils.get_savepath(datapath, '_direction', replace=replace)
-# print('Saving to {}'.format(savepath))
-# utils.savefig(fig, savepath)
+    if save:
+        savepath = utils.get_savepath(datapath, '_speed', replace=replace)
+        print('Saving to {}'.format(savepath))
+        utils.savefig(fig, savepath)
+
+# Plot robot heading and bearing to tag
+if 'gps_heading' in data.columns:
+    plt.plot(times, utils.wrap_to_180(np.degrees(data['gps_heading'])), label='Hydrophone heading (relative to east)', marker='.')
+if 'logged_heading' in data.columns:
+    plt.plot(times, utils.wrap_to_180(np.degrees(utils.convert_heading(data['logged_heading']))), label='Logged robot heading (relative to east)', marker='.')
+if 'tag_bearing' in data.columns:
+    plt.plot(times, utils.wrap_to_180(np.degrees(data['tag_bearing'])), label='Tag bearing (relative to east)', marker='.')
+if 'relative_tag_bearing' in data.columns:
+    plt.plot(times, utils.wrap_to_180(np.degrees(data['relative_tag_bearing'])), label='Tag bearing (relative to robot heading)', marker='.')
+plt.xlabel('Time (s)')
+plt.ylabel('Angle (deg)')
+plt.legend()
+plt.suptitle('{} direction'.format(name))
+fig = plt.gcf()
+plt.show()
+
+if save:
+    savepath = utils.get_savepath(datapath, '_direction', replace=replace)
+    print('Saving to {}'.format(savepath))
+    utils.savefig(fig, savepath)
 
 # start_time = datetime.fromisoformat(data['datetime'][0])
 # move_0 = datetime.fromisoformat('2022-05-31 16:15:02')

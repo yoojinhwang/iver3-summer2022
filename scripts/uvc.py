@@ -17,7 +17,7 @@ class UVCState(SerialState):
 
 class UVC(SerialDevice):
     # Exract information from response lines
-    # https://regex101.com/r/JP9wEw/1
+    # https://regex101.com/r/0umeDn/1
     _RESPONSE_REGEX = re.compile(r'^\$([A-Z]+),?(.*)\*([0-9A-F]{2})$')
     _COMPASS_REGEX = re.compile(r'^([-\d\.]+)P([-\d\.]+)R([-\d\.]+)T([-\d\.]+)D([-\d\.]+)$')
 

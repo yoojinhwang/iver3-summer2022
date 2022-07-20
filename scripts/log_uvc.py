@@ -7,33 +7,6 @@ import os
 from datetime import datetime
 import numpy as np
 
-# Define a callback to log data
-def log_data(uvc):
-    knots_per_meter = 1.944
-    latitude, longitude = uvc.get_coords(default=('',''))
-    x_speed, y_speed = uvc.get_speeds(default=(np.nan, np.nan))
-    if np.isnan(x_speed) or np.isnan(y_speed):
-        speed = ''
-    else:
-        print("Logdata variables")
-        speed = np.sqrt(x_speed**2 + y_speed**2) * knots_per_meter
-        print(latitude, longitude, speed, uvc.get_heading(default=''))
-    data = [
-        datetime.now(),
-        latitude,
-        longitude,
-        speed,
-        uvc.get_heading(default='')
-    ]
-
-    # Write to a savefile if one was given and to the console
-    if savefile is not None:
-        writer.writerow(data)
-    print(','.join([str(datum) for datum in data]))
-    return data
-
-
-
 if __name__ == '__main__':
     # Read in command line arguments: savepath to a file to dump data
     _, *rest = sys.argv
@@ -46,7 +19,8 @@ if __name__ == '__main__':
                 'Latitude',
                 'Longitude',
                 'Vehicle Speed (Kn)',
-                'C True Heading'
+                'C True Heading',
+                'DFS Depth(m)'
             ]
 
     # Open a file to save the data to if a savepath was given
@@ -70,6 +44,27 @@ if __name__ == '__main__':
     def request_data():
         uvc._write_command('OSD','C','G','S','P','Y','D','T','I')
     
+    # Define a callback to log data
+    def log_data():
+        latitude, longitude = uvc.get_coords(default=('',''))
+        x_speed, y_speed = uvc.get_speeds(default=(np.nan, np.nan))
+        if np.isnan(x_speed) or np.isnan(y_speed):
+            speed = ''
+        else:
+            speed = np.sqrt(x_speed**2 + y_speed**2) * knots_per_meter
+        data = [
+            datetime.now(),
+            latitude,
+            longitude,
+            speed,
+            uvc.get_heading(default=''),
+            uvc.get_depth(default='')
+        ]
+
+        # Write to a savefile if one was given and to the console
+        if savefile is not None:
+            writer.writerow(data)
+        print(','.join([str(datum) for datum in data]))
     
     # Add the callbacks
     uvc.on_listening_run(request_data)
