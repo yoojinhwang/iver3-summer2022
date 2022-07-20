@@ -1,3 +1,4 @@
+#from appscript import k
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -18,8 +19,8 @@ def reject_outliers(data, m=2):
     '''Remove datapoints more than m standard deviations away from the mean'''
     return data[abs(data - np.mean(data)) < m * np.std(data)]
 
-#datapath = '../data/07-03-2022/070322_circle_around'
-datapath = '/Users/Declan/Desktop/HMC/AUV/iver3-summer2022/data/07-06-2022/BFS_PCONTROL_LINE_A_75_R_6_D_5'
+datapath = '../data/07-07-2022/7_7_22_A_75_D_5_R_3_attempt9'
+# datapath = '/Users/Declan/Desktop/HMC/AUV/iver3-summer2022/data/07-06-2022/BFS_PCONTROL_LINE_A_75_R_6_D_5_attempt9'
 name = os.path.splitext(os.path.split(datapath)[1])[0]
 data = pd.read_csv(datapath)
 latitude = np.array(data['Latitude'])
@@ -39,6 +40,8 @@ waypoints = np.array([[34.109191, -117.712723],
                       [34.109191, -117.712723]])
 origin_cart = utils.to_cartesian(origin, origin)
 waypoints_cart = [utils.to_cartesian(waypoint, origin) for waypoint in waypoints]
+print("origin_cart", origin_cart)
+print("waypoints_cart", waypoints_cart)
 
 for i in range(0, len(x)):
     lat = x[i]
@@ -51,6 +54,9 @@ y = [coord[1] for coord in cartesian_coords]
 x_way = [coord[0] for coord in waypoints_cart]
 y_way = [coord[1] for coord in waypoints_cart]
 
+x = x[2:]
+y = y[2:]
+
 ## TIME STUFF
 # convert to seconds
 time = np.array(data['datetime'])
@@ -59,46 +65,70 @@ timedelta = time_object[0] - datetime(1900, 1, 1)
 seconds = timedelta.total_seconds() #time since epoch
 
 time_object = [((x-datetime(1900, 1, 1))- timedelta) for x in time_object]
-#print(time_object)
-
 time_total_seconds = [y.total_seconds() for y in time_object]
-#print(time_total_seconds)
-#print(type(time_total_seconds[0]))
-## END TIME STUFF
 
+x = x[2:]
+y = y[2:]
+
+# Plot gif for the robot moving at each time step overlay the robot vector on top
+
+
+# Scatterplot for X,Y 
 plt.plot(x[0], y[0], marker='o', color='blue', label='Start')
 plt.plot(x[-1], y[-1], marker='o', color='red', label='End')
 plt.plot(origin_cart[0], origin_cart[1], marker='o', color = 'green', label = 'Origin')
 plt.plot(x_way, y_way ,marker='o', color = 'black',label = 'Waypoints')
 
+for i in range(len(x_way)):
+    circle = plt.Circle((x_way[i], y_way[i]), 5, color='red', fill=False)
+    plt.gca().add_patch(circle)
+# plt.axis('scaled')
 
 for i in range(len(x)):
     plt.scatter(x[i], y[i], color=plt.cm.RdYlBu(i))
-    #plt.scatter(x[i], y[i], cmap='gray')
 
 plt.title("Cartesian Coordinate Plot")
 plt.xlabel("X (m)")
 plt.ylabel("Y (m)")
 plt.legend()
-#fig = plt.gcf()
-#savepath = utils.get_savepath(datapath, '_histogram', replace=replace)
-#print('Saving to {}'.format(savepath))
-#utils.savefig(fig, savepath)
+
+# fig = plt.gcf()
+# savepath = utils.get_savepath(datapath, '_histogram', replace=replace)
+# print('Saving to {}'.format(savepath))
+# utils.savefig(fig, savepath)
 
 plt.show()
 
+
 # Plot controls
+"""
+yaw_control = 75*(des-true)+128
+yaw_control -128 = 75*(des-true)
+(yaw_control - 128)/75 = des - true
+des = (yaw_control - 128)/75 + true
+"""
 
-# yaw = data['Yaw Control'].apply(int, base=16)
-# thrust_control = np.array(data['Thrust Control'])
+desired_yaw = data['C True Heading'] - (data['Yaw Control'].apply(int, base=16) - 128)/75
+# desired_yaw = (data['Yaw Control'].apply(int, base=16) - 128)/75 + data['C True Heading']
+# desired_yaw = -1*(data['Yaw Control'].apply(int, base=16) * (1/75) - data['C True Heading'] -(255/2))
+yaw = data['C True Heading']
+thrust_control = np.array(data['Thrust Control'])
 
-# plt.plot(time_total_seconds, yaw)
-# plt.xlabel("Seconds")
-# plt.ylabel("Yaw Control Decimal Values (0 - 255)")
+plt.plot(time_total_seconds, desired_yaw, label = "Desired Yaw")
+plt.plot(time_total_seconds, yaw, label = "True Yaw")
+plt.xlabel("Seconds")
+plt.ylabel("Yaw Control Angle")
+plt.legend()
 
-# plt.show()
+plt.show()
 
-# Plot gif for the robot moving at each time step overlay the robot vector on top
+# Plot error between vectors
+yaw_error = desired_yaw - yaw
+plt.plot(time_total_seconds, yaw_error)
+plt.xlabel("Seconds")
+plt.ylabel("Yaw Error Angle")
+plt.title("Yaw Error Angle")
+plt.show()
 
 
 
