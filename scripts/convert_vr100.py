@@ -4,9 +4,9 @@ import utils
 import os
 import numpy as np
 
-datapath = '../data/07-18-2022/VR100_10913_D2022.07.18T12.52.20.csv'
+datapath = '../data/07-19-2022/VR100_10913_D2022.07.20T09.29.53.csv'
 filepath, fileext = os.path.splitext(datapath)
-savepath = '../data/07-18-2022/tag78_swimming_test_VR100_1.csv'
+savepath = '../data/07-19-2022/tag78_shore_2_boat_all_static_test_VR100_0.csv'
 # savepath = '{}_converted.{}'.format(filepath, fileext)
 
 # Read vr100 csv

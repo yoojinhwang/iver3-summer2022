@@ -60,7 +60,9 @@ if has_times:
 
 # Plot trajectory
 if 'x' in data.columns and 'y' in data.columns:
-    if origin is None and 'latitude' in data.columns and 'longitude' in data.columns:
+    if origin is not None:
+        plt.plot([0], [0], marker='o', color='#ff7f0e', label='Tag')
+    elif 'latitude' in data.columns and 'longitude' in data.columns:
         origin = data['latitude'][0], data['longitude'][0]
     x, y = np.array(data['x']), np.array(data['y'])
     x = x[~np.isnan(x)]
@@ -72,7 +74,6 @@ if 'x' in data.columns and 'y' in data.columns:
     # plt.plot(data['x'], data['y'], marker='.', label='Hydrophone trajectory')
     plt.plot(x[0], y[0], marker='o', color='blue', label='Start')
     plt.plot(x[-1], y[-1], marker='o', color='red', label='End')
-    # plt.plot([0], [0], marker='o', color='#ff7f0e', label='Tag')
 
     cartesian_bounds = np.array([plt.gca().get_xlim(), plt.gca().get_ylim()])
     cartesian_bounds = utils.pad_bounds(cartesian_bounds.T, f=2).T

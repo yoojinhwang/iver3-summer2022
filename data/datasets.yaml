@@ -1,0 +1,186 @@
+# A single file to contain metadata for every individual dataset
+# Types of datasets:
+#   tag_period_measurement: data collected without moving the tag for the purposes of measuring the period at which the tag pings
+
+# Useful for: period measurement
+tag77_air_callibration_0:
+    type: 'tag_period_measurement'
+    description:
+        'Tag 65477 was placed right next to the hydrophone in air for 1 hour and 40 minutes'
+    date: '05-26-2022'
+    hydrophones:
+        457049:
+            path: '05-26-2022/tag77_0m_air_test_0.csv'
+
+# Useful for: period measurement
+tag78_air_callibration_0:
+    type: 'tag_period_measurement'
+    description:
+        'Tag 65478 was placed right next to the hydrophone in air for 6 hours and 50 minutes'
+    date: '05-26-2022'
+    hydrophones:
+        457049:
+            path: '05-26-2022/tag78_0m_air_test_0.csv'
+
+# Useful for: period measurement
+tag78_air_callibration_1:
+    type: 'tag_period_measurement'
+    description:
+        'Tag 65478 was placed right next to the hydrophone in air for 1 hour and 14 minutes'
+    date: '05-26-2022'
+    hydrophones:
+        457049:
+            path: '05-26-2022/tag78_0m_air_test_1.csv'
+
+# Useful for: period measurement
+tag79_air_callibration_0:
+    type: 'tag_period_measurement'
+    description:
+        'Tag 65479 was placed right next to the hydrophone in air for 1 hour and 43 minutes'
+    date: '05-26-2022'
+    hydrophones:
+        457049:
+            path: '05-26-2022/tag79_0m_air_test_0.csv'
+
+# We don't have paired data from the other hydrophone
+tag78_50m_increment_long_beach_test_457012_2:
+    type: 'single_hydrophone'
+    description:
+        'The AUV started next to the tag and moved away from it, stopping at every 50 meters'
+    date: '06-01-2022'
+    hydrophones:
+        457012:
+            path: '06-01-2022/tag78_50m_increment_long_beach_test_457012_2.csv'
+            log_paths: [
+                '../data\06-01-2022\20220601-155249-CH_Long_Beach_Mission_05_31_2022-IVER3-3013\Logs\20220601-155325--CH_Long_Beach_Mission_05_31_2022-IVER3-3013.log'
+            ]
+    tag_coords:
+        latitude: 33.7421588
+        longitude: -118.12206
+
+# We don't have paired data from the other hydrophone
+tag78_50m_increment_long_beach_test_3:
+    type: 'single_hydrophone'
+    description:
+        'The AUV started next to the tag and moved away from it, stopping at every 50 meters'
+    date: '06-01-2022'
+    hydrophones:
+        457012:
+            path: '06-01-2022/tag78_50m_increment_long_beach_test_457012_3.csv'
+            log_paths: [
+                '../data/06-01-2022/20220601-164716-CH_Long_Beach_Mission_05_31_2022-IVER3-3013/Logs/20220601-164722--CH_Long_Beach_Mission_05_31_2022-IVER3-3013.log'
+            ]
+    tag_coords:
+        latitude: 33.7421588
+        longitude: -118.12206
+
+# Can be used with the Kalman and Particle filters
+tag78_50m_increment_long_beach_test_0:
+    type: 'two_hydrophones'
+    description:
+        'The AUV started next to the tag and moved away from it, stopping at every 50 meters'
+    date: '06-08-2022'
+    hydrophones:
+        457049:
+            path: '06-08-2022/tag78_50m_increment_long_beach_test_457049_0.csv'
+        457012:
+            path: '06-08-2022/tag78_50m_increment_long_beach_test_457012_0.csv'
+            log_paths: [
+                '../data\06-08-2022\20220608-153927-CH_Long_Beach_Mission_0_06_07_2022-IVER3-3013\Logs\20220608-153932--CH_Long_Beach_Mission_0_06_07_2022-IVER3-3013.log',
+                '../data\06-08-2022\20220608-154731-CH_Long_Beach_Mission_0_06_07_2022-IVER3-3013\Logs\20220608-154736--CH_Long_Beach_Mission_0_06_07_2022-IVER3-3013.log'
+            ]
+    tag_coords:
+        latitude: 33.7421588
+        longitude: -118.12206
+
+# Can be used with the Kalman and Particle filters
+tag78_cowling_none_long_beach_test:
+    type: 'two_hydrophones'
+    description:
+        'The AUV started next to the tag and moved away from it, then back to it, at different speeds each time'
+    date: '06-08-2022'
+    hydrophones:
+        457049:
+            path: '06-08-2022/tag78_cowling_none_long_beach_test_457049_0.csv'
+        457012:
+            path: '06-08-2022/tag78_cowling_none_long_beach_test_457012_0.csv'
+            log_paths: [
+                '../data\06-08-2022\20220608-171235-CH_Long_Beach_Mission_1_06_07_2022-IVER3-3013\Logs\20220608-171318--CH_Long_Beach_Mission_1_06_07_2022-IVER3-3013.log'
+            ]
+    tag_coords:
+        latitude: 33.7421588
+        longitude: -118.12206
+
+# Can be used with the Kalman and Particle filters
+tag78_drift_test_0:
+    type: 'two_hydrophones'
+    description:
+        'Two hydrophones were on the same boat, and the boat drifted away from the tag which was attached to a buoy'
+    date: '07-18-2022'
+    hydrophones:
+        457049:
+            path: '07-18-2022/tag78_drift_test_457049_0.csv'
+        VR100:
+            path: '07-18-2022/tag78_drift_test_VR100_0.csv'
+    tag_coords:
+        latitude: 10.92378733
+        longitude: -85.79437267
+
+# Can be used with the Kalman and Particle filters
+tag78_shore_2_boat_all_static_test_0:
+    type: 'two_hydrophones'
+    description:
+        'Two hydrophones were each on different boats while the tag which was attached to a buoy'
+    date: '07-18-2022'
+    hydrophones:
+        457049:
+            path: '07-18-2022/tag78_shore_2_boat_all_static_test_457049_0.csv'
+        VR100:
+            path: '07-18-2022/tag78_shore_2_boat_all_static_test_VR100_0.csv'
+    tag_coords:
+        latitude: 10.92378733
+        longitude: -85.79437267
+
+# Can be used with the Kalman and Particle filters
+tag78_shore_2_boat_all_static_test_1:
+    type: 'two_hydrophones'
+    description:
+        'Two hydrophones were each on different boats while the tag which was attached to a buoy'
+    date: '07-18-2022'
+    hydrophones:
+        457049:
+            path: '07-18-2022/tag78_shore_2_boat_all_static_test_457049_1.csv'
+        VR100:
+            path: '07-18-2022/tag78_shore_2_boat_all_static_test_VR100_1.csv'
+    tag_coords:
+        latitude: 10.924123
+        longitude: -85.7945185
+
+# Can be used with the Kalman and Particle filters
+tag78_shore_2_boat_all_static_test_0:
+    type: 'two_hydrophones'
+    description:
+        'Two hydrophones were each on different boats while the tag which was attached to a buoy'
+    date: '07-19-2022'
+    hydrophones:
+        457049:
+            path: '07-19-2022/tag78_shore_2_boat_all_static_test_457049_0.csv'
+        VR100:
+            path: '07-19-2022/tag78_shore_2_boat_all_static_test_VR100_0.csv'
+    tag_coords:
+        latitude: 10.9247035
+        longitude: -85.79533716666667
+
+# Hopefully can be used with the Kalman and Particle filters
+tag_78_swimming_test_0:
+    type: 'two_hydrophones'
+    description:
+        'Two hydrophones were each on different boats while the tag was moved around by a swimmer'
+    date: '07-18-2022'
+    hydrophones:
+        457049:
+            path: '07-18-2022/tag78_swimming_test_457049_0.csv'
+        VR100:
+            path: '07-18-2022/tag78_swimming_test_VR100_0.csv'
+    tag_coords:
+        path: '07-18-2022/santa_elena_swim.csv'

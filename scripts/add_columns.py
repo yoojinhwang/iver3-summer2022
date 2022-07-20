@@ -40,7 +40,7 @@ speed_of_sound = 1460
 # 07-19-2022 Santa Elena Bay tag buoy 0 coords
 tag_coords = (10.9247035, -85.79533716666667)
 
-targetpath = '../data/07-19-2022/tag78_shore_2_boat_all_static_test_457049_0.csv'
+targetpath = '../data/07-19-2022/tag78_shore_2_boat_all_static_test_VR100_0.csv'
 sourcepath = None
 # sourcepath = '../data/06-29-2022/tag78_cowling_small_snail_BFS_test_uvc_log_0.csv'
 
