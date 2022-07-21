@@ -13,15 +13,12 @@ speed_of_sound = 1460
 
 # extract tag coordinates, look at prev
 
-key = lamdba row: row['name of the column']
-
 # utils project time series
 
-tag_coords = (34.106539,-117.7123235)
+# tag_coords = (34.106539,-117.7123235)
 targetpath = '../data/06-27-2022/tag78_overnight_test_457049_0.csv'
-sourcepath = None
-
 tagpath = '../data/'
+sourcepath = None
 
 # 06-01-2022/50m_increment_2
 # sourcepath = r'../data\06-01-2022\20220601-155249-CH_Long_Beach_Mission_05_31_2022-IVER3-3013\Logs\20220601-155325--CH_Long_Beach_Mission_05_31_2022-IVER3-3013.log'
@@ -106,6 +103,8 @@ def add_columns(input, target, tag_coord):
 
         # Add bearing relative to the tag using latitude and longitude columns
         latitudes, longitudes = get_hydrophone_column('latitude'), get_hydrophone_column('longitude')
+
+        # TODO: here
         sensor_coords = utils.to_cartesian((latitudes, longitudes), tag_coords)
         hydrophone_data['x'] = sensor_coords[:, 0]
         hydrophone_data['y'] = sensor_coords[:, 1]
