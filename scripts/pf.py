@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 from datetime import timedelta
 import utils
+import scipy
 from scipy.stats import multivariate_normal
 from plotting import plot_df
 import matplotlib.pyplot as plt
@@ -29,8 +30,8 @@ class MotionModelBase(ABC):
             particles[:, 1] = groundtruth[1]
             particles[:, 2] = groundtruth[2]
         else:
-            particles[:, 0] = np.random.uniform(-15, 15, num_particles)
-            particles[:, 1] = np.random.uniform(-15, 15, num_particles)
+            particles[:, 0] = np.random.uniform(-150, 150, num_particles)
+            particles[:, 1] = np.random.uniform(-150, 150, num_particles)
         return particles
     
     @abstractmethod
@@ -227,7 +228,12 @@ class ParticleFilter(Filter):
             [np.zeros([2, 2]), cov2]
         ])
         x = np.column_stack([r1_pred, r_dot1_pred, r2_pred, r_dot2_pred])
-        dist = multivariate_normal(measurement, measurement_cov)
+        try:
+            dist = multivariate_normal(measurement, measurement_cov)
+        except scipy.linalg.LinAlgError as err:
+            print(err)
+            print(measurement_cov)
+            dist = multivariate_normal(measurement, measurement_cov, allow_singular=True)
         weight = dist.pdf(x)
         
         if np.sum(np.isnan(weight)) == 0:
@@ -246,13 +252,29 @@ class ParticleFilter(Filter):
         self._particles = self._particles[indices]
 
 if __name__ == '__main__':
-    datapath1 = '../data/06-08-2022/tag78_cowling_none_long_beach_test_457012_0.csv'
-    datapath2 = '../data/06-08-2022/tag78_cowling_none_long_beach_test_457049_0.csv'
+    replace = True
+
+    datapath1 = '../data/07-19-2022/tag78_shore_2_boat_all_static_test_VR100_0.csv'
+    datapath2 = '../data/07-19-2022/tag78_shore_2_boat_all_static_test_457049_0.csv'
     data1 = pd.read_csv(datapath1)
     data2 = pd.read_csv(datapath2)
+    data1 = data1[data1['tag_id'] == 65478].reset_index(drop=True)
+    data2 = data2[data2['tag_id'] == 65478].reset_index(drop=True)
     data1['datetime'] = pd.to_datetime(data1['datetime'])
     data2['datetime'] = pd.to_datetime(data2['datetime'])
-    pf = ParticleFilter.from_csvs(data1, data2, 10, RandomMotionModel, save_history=True)
+    pf = ParticleFilter.from_csvs(data1, data2, 1000, RandomMotionModel, save_history=True)
+
+    # Set signal strength model parameters
+    pf._kf1._m = -0.10527966
+    pf._kf1._l = -0.55164737
+    pf._kf1._b = 68.59493072
+    pf._kf1._signal_var = 16.250003
+
+    pf._kf2._m = -0.20985953
+    pf._kf2._l = 5.5568182
+    pf._kf2._b = 76.90064068
+    pf._kf2._signal_var = 9.400336
+
     pf.run()
 
     # Extract all x and y values from the particle filter's history to create a bounding box for the plot
@@ -266,8 +288,9 @@ if __name__ == '__main__':
     groundtruth_path = np.zeros((len(pf._time_history), 6))
     groundtruth_state1 = np.column_stack([data1['gps_distance'], data1['gps_speed']])
     groundtruth_state2 = np.column_stack([data2['gps_distance'], data2['gps_speed']])
-    # pf._kf1.plot(groundtruth_state1, datapath1, save=False)
-    # pf._kf2.plot(groundtruth_state2, datapath2, save=False)
+    pf._kf1.plot(groundtruth_state1, datapath1, save=True, replace=replace)
+    pf._kf2.plot(groundtruth_state2, datapath2, save=True, replace=replace)
 
     # Create the plot
-    plot_df(pf, groundtruth_path, bbox=bbox, square=True)
+    savepath = utils.get_savepath(datapath1, '_particle_filter', extension='gif', replace=replace)
+    plot_df(pf, groundtruth_path, bbox=bbox, square=True, save_to=savepath)

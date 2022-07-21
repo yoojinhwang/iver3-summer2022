@@ -48,7 +48,8 @@ class KalmanFilter(Filter):
         self._signal_var = 15.297
 
         self._distance_var = 1e-3
-        self._velocity_var = 0.0604
+        # self._velocity_var = 0.0604
+        self._velocity_var = 1
 
     def reset(self):
         super().reset()
@@ -202,11 +203,25 @@ class KalmanFilter(Filter):
         self._total_signal_error = total_signal_error
 
 if __name__ == '__main__':
-    datapath = '../data/07-18-2022/.csv'
+    datapath = '../data/07-18-2022/tag78_drift_test_VR100_0.csv'
     data = pd.read_csv(datapath)
+    data = data[data['tag_id'] == 65478].reset_index(drop=True)
     data['datetime'] = pd.to_datetime(data['datetime'])
     groundtruth_state = np.column_stack([data['gps_distance'], data['gps_speed']])
     kf = KalmanFilter.from_csv(data)
+
+    # VR100
+    kf._m = -0.10527966
+    kf._l = -0.55164737
+    kf._b = 68.59493072
+    kf._signal_var = 16.250003
+
+    # 457049
+    # kf._m = -0.20985953
+    # kf._l = 5.5568182
+    # kf._b = 76.90064068
+    # kf._signal_var = 9.400336
+    
     kf.run()
     kf.plot(groundtruth_state=groundtruth_state, datapath=datapath, save=False)
 

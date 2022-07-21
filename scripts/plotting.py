@@ -34,8 +34,8 @@ def plot_df(pf, groundtruth_path_data, save_to=None, plot_avg=True, msg = '', bb
 
     hydrophone1, = ax.plot([], [], linestyle='None', marker='o', label='hydrophone 1')
     hydrophone2, = ax.plot([], [], linestyle='None', marker='o', label='hydrophone 2')
-    hydrophone1_range = mpl.patches.Circle((0, 0), 0, fill=False, linewidth=10)
-    hydrophone2_range = mpl.patches.Circle((0, 0), 0, fill=False, linewidth=10)
+    hydrophone1_range = mpl.patches.Circle((0, 0), 0, fill=False, linewidth=1)
+    hydrophone2_range = mpl.patches.Circle((0, 0), 0, fill=False, linewidth=1)
 
     ax.add_patch(hydrophone1_range)
     ax.add_patch(hydrophone2_range)
@@ -117,7 +117,7 @@ def plot_df(pf, groundtruth_path_data, save_to=None, plot_avg=True, msg = '', bb
         # Return changed artists?
         return artists
 
-    anim = animation.FuncAnimation(fig, update, frames=range(0, num_steps, 10), init_func = init, blit=False, interval = 33, repeat=True)
+    anim = animation.FuncAnimation(fig, update, frames=range(0, num_steps, 1), init_func = init, blit=False, interval = 33, repeat=True)
     
     # Get bounding box or use default values
     if bbox:

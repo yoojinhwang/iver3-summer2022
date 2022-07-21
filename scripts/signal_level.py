@@ -20,7 +20,7 @@ def scrollable_legend(fig, legend):
 
     fig.canvas.mpl_connect("scroll_event", func)
 
-replace = False
+replace = True
 save = True
 
 # Create new dataframe to hold merged data
@@ -31,7 +31,9 @@ tag_id = 65478
 
 # Loop through the files found
 files = utils.imerge(
-    utils.find_files('../data/07-18-2022', name=r'tag78(?!_swimming)(?!_shore_2_boat_all_static_test_\w{5,6}_0).*VR100.*', extension=r'\.csv'))
+    utils.find_files('../data/07-19-2022', name=r'tag78_shore_2_boat_all_static_test_.*', extension=r'\.csv'))
+    # utils.find_files('../data/07-18-2022', name=r'tag78_drift_test_.*', extension=r'\.csv'))
+    # utils.find_files('../data/07-18-2022', name=r'tag78(?!_swimming)(?!_shore_2_boat_all_static_test_\w{5,6}_0).*VR100.*', extension=r'\.csv'))
     # utils.find_files('../data/07-18-2022', name=r'tag78(?!_swimming).*', extension=r'\.csv'))
     # utils.find_files('../data/06-29-2022', name=r'.*457012.*', extension=r'\.csv'))
     # utils.find_files('../data/06-08-2022', name=r'.*(?:increment|none).*457012_0'))
@@ -41,7 +43,7 @@ files = utils.imerge(
     # utils.find_files('../data/06-01-2022', extension=r'\.csv'))
     # utils.find_files('../data/05-31-2022', '../data/05-27-2022', extension=r'\.csv'))
     # utils.find_files('../../icex-lair-2021', name=r'data_[\d]+', extension=r'\.csv'))
-save_to = '../plots/07-18-2022'
+save_to = '../plots/07-19-2022'
 
 def get_df_column(df, name):
     return np.array(df.get(name, [np.nan] * len(df)))
@@ -161,7 +163,8 @@ plt.close()
 #     ['distance', 'bearing', 'gps_speed', 'logged_speed'],
 # ]
 column_sets = [
-    ['distance']
+    ['distance'],
+    ['distance', 'gps_speed']
 ]
 for columns in column_sets:
     x = None
@@ -186,8 +189,8 @@ for columns in column_sets:
             np.concatenate([np.isnan(explanatory_vars), np.isnan(signals.reshape((-1, 1)))], axis=1))
         
         A = np.concatenate([explanatory_vars, np.ones([len(explanatory_vars), 1])], axis=1)
-        if x is None:
-            x = np.linalg.lstsq(A[~isnan], signals[~isnan], rcond=None)[0]
+        # if x is None:
+        x = np.linalg.lstsq(A[~isnan], signals[~isnan], rcond=None)[0]
         
         predicted_signals = A @ x
         diff = signals - predicted_signals

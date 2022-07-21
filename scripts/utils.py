@@ -168,14 +168,14 @@ def split_path(path):
         first, last = os.path.split(first)
     return [last] + components
 
-def get_savepath(datapath, msg, replace=False):
+def get_savepath(datapath, msg, extension='png', replace=False):
     components = split_path(datapath)
     for i, component in enumerate(components):
         if component == 'data':
             components[i] = 'plots'
             break
     components[-1] = os.path.splitext(components[-1])[0]
-    return add_version('{}{}.png'.format(os.path.join(*components), msg), replace=replace)
+    return add_version('{}{}.{}'.format(os.path.join(*components), msg, extension), replace=replace)
 
 def to_cartesian(coords, ref):
     '''
