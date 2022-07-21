@@ -227,6 +227,9 @@ def angle_between(ref, vec):
     vec_mag = np.apply_along_axis(get_mag, 0, vec)
 
     # Compute the absolute value of the angle between the vectors using their dot product
+    print("REF", ref_mag)
+    print("VEC", vec_mag)
+    vec_mag = vec_mag + 1.e-17
     abs_angles = np.arccos(dot / (ref_mag * vec_mag))
 
     # Compute the sign of the angle between the vectors using their determinant

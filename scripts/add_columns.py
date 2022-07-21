@@ -16,9 +16,10 @@ speed_of_sound = 1460
 # utils project time series
 
 # tag_coords = (34.106539,-117.7123235)
-targetpath = '../data/06-27-2022/tag78_overnight_test_457049_0.csv'
-tagpath = '../data/'
+targetpath = '../data/07-21-2022/tag78_swimming_test_VR100.csv'
+tagpath = '../data/07-21-2022/072122_combined.csv'
 sourcepath = None
+multiple_tags = True
 
 # 06-01-2022/50m_increment_2
 # sourcepath = r'../data\06-01-2022\20220601-155249-CH_Long_Beach_Mission_05_31_2022-IVER3-3013\Logs\20220601-155325--CH_Long_Beach_Mission_05_31_2022-IVER3-3013.log'
@@ -49,132 +50,171 @@ sourcepath = None
 hydrophone_data = pd.read_csv(targetpath)
 hydrophone_data['datetime'] = pd.to_datetime(hydrophone_data['datetime'])
 
+if multiple_tags:
+        
+    hydrophone_data = pd.read_csv(targetpath)
+    hydrophone_data['datetime'] = pd.to_datetime(hydrophone_data['datetime'])
+
+    print("TYPE", type(hydrophone_data['datetime'][3]))
+    print("HERE", hydrophone_data['datetime'][3].strftime('%Z'))
+
+    tag_data = pd.read_csv(tagpath)
+    tag_data['datetime'] = pd.to_datetime(tag_data['datetime'])
+    print(type(tag_data['datetime'][3]))
+    print("TIMEZONE", tag_data['datetime'][3].strftime('%Z'))
+
+    # Sort the two dataframes by the new key, as required by merge_asof function
+    hydrophone_data.sort_values(by="datetime", inplace=True)
+    print(hydrophone_data.head)
+    tag_data.sort_values(by="datetime", inplace=True)
+    print(tag_data.head)
+
+    # hydrophone_data['datetime'] = hydrophone_data['datetime'].dt.tz_localize('UTC')
+    hydrophone_data['datetime_hydrophone'] = hydrophone_data['datetime']
+
+    tag_data['datetime_tag'] = tag_data['datetime']
+
+    # latitude and longitude
+    tag_data['latitude_tag'] = tag_data['latitude']
+    tag_data['longitude_tag'] = tag_data['longitude']
+
+    hydrophone_data['latitude_hydrophone'] = hydrophone_data['latitude']
+    hydrophone_data['longitude_hydrophone'] = hydrophone_data['longitude']
+
+    result_df = pd.merge_asof(hydrophone_data, tag_data, on="datetime", direction="nearest")
+
+    print(result_df.head)
+
 def get_hydrophone_column(name):
     return np.array(hydrophone_data.get(name, [np.nan] * len(hydrophone_data)))
 
-def add_columns(input, target, tag_coord):
-
-    # Add latitude, longitude, and logged speed column using the mission logs
-    if sourcepath is not None:
-        mission_data = pd.read_csv(sourcepath, sep=';')
-        mission_data['datetime'] = pd.to_datetime(mission_data['Date'] + ' ' + mission_data['Time'])
-        latitudes = get_hydrophone_column('latitude')
-        longitudes = get_hydrophone_column('longitude')
-        logged_speeds = get_hydrophone_column('logged_speed')
-        logged_heading = get_hydrophone_column('logged_heading')
-        mission_iter = utils.pairwise(mission_data.iterrows())
-        for i, hydrophone_row in hydrophone_data.iterrows():
-            if hydrophone_row['datetime'] >= mission_data['datetime'][0]:
-                hydrophone_time = hydrophone_row['datetime']
-                try:
-                    closest_row = None
-                    while closest_row is None:
-                        (_, row), (_, next_row) = next(mission_iter)
-                        if next_row['datetime'] > hydrophone_time >= row['datetime']:
-                            if next_row['datetime'] - hydrophone_time > hydrophone_time - row['datetime']:
-                                closest_row = row
-                            else:
-                                closest_row = next_row
-                    iver_coords = (closest_row['Latitude'], closest_row['Longitude'])
-                    latitudes[i] = iver_coords[0]
-                    longitudes[i] = iver_coords[1]
-                    logged_speeds[i] = closest_row['Vehicle Speed (Kn)'] * meters_per_knot
-                    logged_heading[i] = closest_row['C True Heading']
-                except StopIteration:
-                    continue
-        hydrophone_data['latitude'] = latitudes
-        hydrophone_data['longitude'] = longitudes
-        hydrophone_data['logged_speed'] = logged_speeds
-        hydrophone_data['logged_heading'] = logged_heading
-
-    # Add gps distance using latitude and longitude columns relative to the tag
-    if 'latitude' in hydrophone_data.columns and 'longitude' in hydrophone_data.columns:
-        gps_distances = np.array(hydrophone_data.get('gps_distance', [np.nan] * len(hydrophone_data)))
-        for i, hydrophone_row in hydrophone_data.iterrows():
-            sensor_coords = (hydrophone_row['latitude'], hydrophone_row['longitude'])
+# Add latitude, longitude, and logged speed column using the mission logs
+if sourcepath is not None:
+    mission_data = pd.read_csv(sourcepath, sep=';')
+    mission_data['datetime'] = pd.to_datetime(mission_data['Date'] + ' ' + mission_data['Time'])
+    latitudes = get_hydrophone_column('latitude')
+    longitudes = get_hydrophone_column('longitude')
+    logged_speeds = get_hydrophone_column('logged_speed')
+    logged_heading = get_hydrophone_column('logged_heading')
+    mission_iter = utils.pairwise(mission_data.iterrows())
+    for i, hydrophone_row in hydrophone_data.iterrows():
+        if hydrophone_row['datetime'] >= mission_data['datetime'][0]:
+            hydrophone_time = hydrophone_row['datetime']
             try:
-                if tag_present == True: 
-                    gps_distances[i] = geopy.distance.geodesic(sensor_coords, sensor_coords).m
-                else:
-                    gps_distances[i] = geopy.distance.geodesic(tag_coords, sensor_coords).m
-            except:
-                pass
-        hydrophone_data['gps_distance'] = gps_distances
+                closest_row = None
+                while closest_row is None:
+                    (_, row), (_, next_row) = next(mission_iter)
+                    if next_row['datetime'] > hydrophone_time >= row['datetime']:
+                        if next_row['datetime'] - hydrophone_time > hydrophone_time - row['datetime']:
+                            closest_row = row
+                        else:
+                            closest_row = next_row
+                iver_coords = (closest_row['Latitude'], closest_row['Longitude'])
+                latitudes[i] = iver_coords[0]
+                longitudes[i] = iver_coords[1]
+                logged_speeds[i] = closest_row['Vehicle Speed (Kn)'] * meters_per_knot
+                logged_heading[i] = closest_row['C True Heading']
+            except StopIteration:
+                continue
+    hydrophone_data['latitude'] = latitudes
+    hydrophone_data['longitude'] = longitudes
+    hydrophone_data['logged_speed'] = logged_speeds
+    hydrophone_data['logged_heading'] = logged_heading
 
-        # Add bearing relative to the tag using latitude and longitude columns
-        latitudes, longitudes = get_hydrophone_column('latitude'), get_hydrophone_column('longitude')
+# Add gps distance using latitude and longitude columns relative to the tag
+if 'latitude' in hydrophone_data.columns and 'longitude' in hydrophone_data.columns:
+    gps_distances = np.array(hydrophone_data.get('gps_distance', [np.nan] * len(hydrophone_data)))
+    for i, hydrophone_row in hydrophone_data.iterrows():
+        sensor_coords = (hydrophone_row['latitude'], hydrophone_row['longitude'])
+        tag_coords = (result_df['latitude_tag'][i],result_df['longitude_tag'][i] )
 
-        # TODO: here
-        sensor_coords = utils.to_cartesian((latitudes, longitudes), tag_coords)
-        hydrophone_data['x'] = sensor_coords[:, 0]
-        hydrophone_data['y'] = sensor_coords[:, 1]
-        # hydrophone_data['gps_distance'] = np.sqrt(np.square(sensor_x) + np.square(sensor_y))
+        print("TAGCOORDS", tag_coords)
+        print("SENSOR_COORDS", sensor_coords)
+        try:
+            if multiple_tags == True: 
+                gps_distances[i] = geopy.distance.geodesic(tag_coords, sensor_coords).m
+                print(gps_distances[i])
+            else:
+                gps_distances[i] = geopy.distance.geodesic(tag_coords, sensor_coords).m
+        except:
+            pass
+    result_df['gps_distance'] = gps_distances
 
-        heading = get_hydrophone_column('logged_heading')
-        compass_vecs = utils.unit_2d(utils.convert_heading(heading))
-        hydrophone_data['relative_tag_bearing'] = utils.angle_between(compass_vecs, sensor_coords)
-        hydrophone_data['tag_bearing'] = utils.angle_between((1, 0), -sensor_coords)
+    result_df.to_csv('../data/07-21-2022/resultdf.csv')
 
-    # Add absolute distances using the first non-nan gps distance
-    gps_distances = get_hydrophone_column('gps_distance')
+    # Add bearing relative to the tag using latitude and longitude columns
+    latitudes, longitudes = get_hydrophone_column('latitude'), get_hydrophone_column('longitude')
 
-    # distances_iter = zip(hydrophone_data['total_distance'], gps_distances)
-    # try:
-    #     while True:
-    #         total_distance, gps_distance = next(distances_iter)
-    #         if not np.isnan(gps_distance):
-    #             offset = gps_distance - total_distance
-    #             hydrophone_data['absolute_distance'] = hydrophone_data['total_distance'] + offset
-    #             break
-    # except StopIteration:
-    #     pass
+    print("HERE")
+    sensor_coords = utils.to_cartesian((latitudes, longitudes), tag_coords)
+    hydrophone_data['x'] = sensor_coords[:, 0]
+    hydrophone_data['y'] = sensor_coords[:, 1]
+    # hydrophone_data['gps_distance'] = np.sqrt(np.square(sensor_x) + np.square(sensor_y))
 
-    # Add speed and delta time of flight calculated from the GPS coordinates
-    gps_distances_iter = utils.pairwise(gps_distances)
-    gps_speeds = get_hydrophone_column('gps_speed')
-    gps_delta_tof = get_hydrophone_column('gps_delta_tof')
-    dts = np.array(hydrophone_data.get('dt', [0] + np.diff(hydrophone_data['total_dt']).tolist()))
-    for i, (current_gps_distance, next_gps_distance) in enumerate(gps_distances_iter):
-        dt = dts[i]
-        if not np.isnan(current_gps_distance) and not np.isnan(next_gps_distance) and dt != 0:
-            delta_distance = (next_gps_distance - current_gps_distance)
-            gps_speeds[i] = delta_distance / dt
-            gps_delta_tof[i] = delta_distance / speed_of_sound
-    hydrophone_data['gps_speed'] = gps_speeds
-    hydrophone_data['gps_delta_tof'] = gps_delta_tof
+    heading = get_hydrophone_column('logged_heading')
+    compass_vecs = utils.unit_2d(utils.convert_heading(heading))
+    hydrophone_data['relative_tag_bearing'] = utils.angle_between(compass_vecs, sensor_coords)
+    hydrophone_data['tag_bearing'] = utils.angle_between((1, 0), -sensor_coords)
 
-    # Add heading calculated from cartesian coordinates
-    sensor_x = get_hydrophone_column('x')
-    sensor_y = get_hydrophone_column('y')
-    gps_heading = get_hydrophone_column('gps_heading')
-    coords_iter = utils.pairwise(zip(sensor_x, sensor_y))
-    for i, ((x, y), (next_x, next_y)) in enumerate(coords_iter):
-        dx = next_x - x
-        dy = next_y - y
-        gps_heading[i] = utils.angle_between((1, 0), (dx, dy))
-    hydrophone_data['gps_heading'] = gps_heading
+# Add absolute distances using the first non-nan gps distance
+gps_distances = get_hydrophone_column('gps_distance')
 
-    # Save dataframe to csv with all of the new columns
-    hydrophone_data.to_csv(targetpath, index=None)
+# distances_iter = zip(hydrophone_data['total_distance'], gps_distances)
+# try:
+#     while True:
+#         total_distance, gps_distance = next(distances_iter)
+#         if not np.isnan(gps_distance):
+#             offset = gps_distance - total_distance
+#             hydrophone_data['absolute_distance'] = hydrophone_data['total_distance'] + offset
+#             break
+# except StopIteration:
+#     pass
 
-if __name__ == '__main__': 
-    parser = argparse.ArgumentParser(description = 'Add gps distance, bearing, speed, delta time of flight using latitude and longitude columns relative to the tag')
-    parser.add_argument('input', nargs='?', help = 'CSV file containing the Iver log file of desired mission')
-    parser.add_argument('target', nargs='?', help = 'CSV file containing the hydrophone data from the desired mission')
-    parser.add_argument('-tc', '--tag-coord', nargs='*', type=int, help = 'Tuple of tag coordinates (latitude, longitude)')
+# Add speed and delta time of flight calculated from the GPS coordinates
+gps_distances_iter = utils.pairwise(gps_distances)
+gps_speeds = get_hydrophone_column('gps_speed')
+gps_delta_tof = get_hydrophone_column('gps_delta_tof')
+dts = np.array(hydrophone_data.get('dt', [0] + np.diff(hydrophone_data['total_dt']).tolist()))
+for i, (current_gps_distance, next_gps_distance) in enumerate(gps_distances_iter):
+    dt = dts[i]
+    if not np.isnan(current_gps_distance) and not np.isnan(next_gps_distance) and dt != 0:
+        delta_distance = (next_gps_distance - current_gps_distance)
+        gps_speeds[i] = delta_distance / dt
+        gps_delta_tof[i] = delta_distance / speed_of_sound
+hydrophone_data['gps_speed'] = gps_speeds
+hydrophone_data['gps_delta_tof'] = gps_delta_tof
 
-    args = parser.parse_args()
-    print(args)
+# Add heading calculated from cartesian coordinates
+sensor_x = get_hydrophone_column('x')
+sensor_y = get_hydrophone_column('y')
+gps_heading = get_hydrophone_column('gps_heading')
+coords_iter = utils.pairwise(zip(sensor_x, sensor_y))
+for i, ((x, y), (next_x, next_y)) in enumerate(coords_iter):
+    dx = next_x - x
+    dy = next_y - y
+    gps_heading[i] = utils.angle_between((1, 0), (dx, dy))
+hydrophone_data['gps_heading'] = gps_heading
 
-    args.input = 'default.csv'
-    args.target = 'None'
-    args.tag_coord = 'None'
+# Save dataframe to csv with all of the new columns
+hydrophone_data.to_csv(targetpath, index=None)
 
-    if 'tag-coord' == 'None': 
-        tag_present = False
-    else: 
-        tag_present = True
+#     parser = argparse.ArgumentParser(description = 'Add gps distance, bearing, speed, delta time of flight using latitude and longitude columns relative to the tag')
+#     parser.add_argument('input', nargs='?', help = 'CSV file containing the Iver log file of desired mission')
+#     parser.add_argument('target', nargs='?', help = 'CSV file containing the hydrophone data from the desired mission')
+#     parser.add_argument('-tc', '--tag-coord', nargs='*', type=int, help = 'Tuple of tag coordinates (latitude, longitude)')
 
-    add_columns(input, args.target, args.tag_coord, tag_present)
+#     args = parser.parse_args()
+#     print(args)
+
+#     args.input = 'default.csv'
+#     args.target = 'None'
+#     args.tag_coord = 'None'
+
+#     if 'tag-coord' == 'None': 
+#         tag_present = False
+#     else: 
+#         tag_present = True
+
+#     add_columns(input, args.target, args.tag_coord, tag_present)
     # check if its default
 
