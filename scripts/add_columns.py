@@ -38,10 +38,14 @@ speed_of_sound = 1460
 # tag_coords = (10.922271274030209, -85.79158178530633)
 
 # 07-19-2022 Santa Elena Bay tag buoy 0 coords
-tag_coords = (10.9247035, -85.79533716666667)
+# tag_coords = (10.9247035, -85.79533716666667)
 
-targetpath = '../data/07-19-2022/tag78_shore_2_boat_all_static_test_VR100_0.csv'
+# 07-21-2022 Santa Elena Bay swim starting point
+tag_coords = (10.92641059, -85.7963883)
+
+targetpath = '../data/07-21-2022/tag78_swimming_test_VR100_1.csv'
 sourcepath = None
+tagpath = '../data/07-21-2022/tag78_swimming_test_tag_coords.csv'
 # sourcepath = '../data/06-29-2022/tag78_cowling_small_snail_BFS_test_uvc_log_0.csv'
 
 # 06-01-2022/50m_increment_2

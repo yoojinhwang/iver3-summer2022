@@ -10,7 +10,8 @@ import mercantile as mt
 save = True
 replace = True
 map_dir = '../maps/OpenStreetMap/Mapnik'
-origin = (10.9247035, -85.79533716666667)
+# origin = (10.92641059, -85.7963883)
+origin = None
 
 def gaussian(x, mu=0, std=1):
     '''PDF for a 1D gaussian'''
@@ -24,7 +25,8 @@ def reject_outliers(data, m=2):
 # datapath = '../data/06-27-2022/tag78_overnight_test_457049_0.csv'
 # datapath = '../data/07-13-2022/santa_elena_bay_coords.csv'
 # datapath = '../data/07-15-2022/snorkeling_and_return_coords.csv'
-datapath = '../data/07-19-2022/tag78_shore_2_boat_all_static_test_457049_0.csv'
+# datapath = '../data/07-19-2022/tag78_shore_2_boat_all_static_test_457049_0.csv'
+datapath = '../data/07-21-2022/tag78_swimming_test_tag_coords.csv'
 name = os.path.splitext(os.path.split(datapath)[1])[0]
 data = pd.read_csv(datapath)
 distances = np.array(data.get('total_distance', [np.nan] * len(data)))

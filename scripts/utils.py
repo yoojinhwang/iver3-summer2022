@@ -77,39 +77,65 @@ def imerge(*its, enum=False):
             else:
                 yield el
 
-def project_time_series(ref, ts, key=None):
+def project_time_series(ref, ts, key=None, reversed=False):
     '''Function to project a time series onto a reference time series'''
     # Create key function if it does not exist yet
     if key is None:
         key = lambda x: x
 
-    # Set up some book keeping
-    it = iter(ts)
-    counter = next(it)
-    r_last = None
+    if reversed:
+        # Set up some book keeping
+        it = iter(ref)
+        r = next(it)
+        t_last = None
 
-    def get_next(r, start):
-        # Try getting the next value of the iterator thats larger than r
-        counter = start
+        for t, t_next in pairwise(ts):
+            t_last = t_next
+            try:
+                while key(r) < key(t):
+                    yield (r, None)
+                    r = next(it)
+                
+                while key(t) <= key(r) and key(r) < key(t_next):
+                    yield (r, t)
+                    r = next(it)
+            except StopIteration:
+                return
+
         try:
-            while counter is not None and key(counter) < key(r):
-                counter = next(it)
+            while True:
+                yield (r, t_last)
+                r = next(it)
         except StopIteration:
-            counter = None
-        return counter
+            return
+    else:
+        # Set up some book keeping
+        it = iter(ts)
+        counter = next(it)
+        r_last = None
 
-    # Iterate through the reference timeseries
-    for r, r_next in pairwise(ref):
-        r_last = r_next
+        def get_next(r, start):
+            # Try getting the next value of the iterator thats larger than r
+            counter = start
+            try:
+                while counter is not None and key(counter) < key(r):
+                    counter = next(it)
+            except StopIteration:
+                counter = None
+            return counter
 
-        counter = get_next(r, counter)
-        if counter is not None and key(counter) < key(r_next):
-            yield (r, counter)
-        else:
-            yield (r, None)
+        # Iterate through the reference timeseries
+        for r, r_next in pairwise(ref):
+            r_last = r_next
 
-    counter = get_next(r_last, counter)
-    yield (r_last, counter)
+            counter = get_next(r, counter)
+            if counter is not None and key(counter) < key(r_next):
+                yield (r, counter)
+            else:
+                yield (r, None)
+
+        counter = get_next(r_last, counter)
+        yield (r_last, counter)
 
 def pairwise(iterable):
     '''s -> (s0,s1), (s1,s2), (s2, s3), ...'''
