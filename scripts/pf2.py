@@ -48,9 +48,9 @@ class RandomMotionModel(MotionModelBase):
         kwargs['name'] = 'random'
         super().__init__(6, **kwargs)
         self._x_mean = kwargs.get('x_mean', 0)
-        self._x_stdev = kwargs.get('x_stdev', 1e-1)
+        self._x_stdev = kwargs.get('x_stdev', 1)
         self._y_mean = kwargs.get('y_mean', 0)
-        self._y_stdev = kwargs.get('y_stdev', 1e-1)
+        self._y_stdev = kwargs.get('y_stdev', 1)
     
     def initialize_particles(self, num_particles, groundtruth=None):
         return super().initialize_particles(num_particles, groundtruth=groundtruth)
@@ -126,7 +126,8 @@ class ParticleFilter(Filter):
         # Queue measurements
         for _, row in df.iterrows():
             timestamp = row['datetime']
-            data = (row['serial_no'], np.array([row['delta_tof'], row['signal_level'], row['x'], row['y'], row['gps_theta'], row['gps_vel']]))
+            # TODO: add groundtruth, unpack the values, this is what hydrophone state
+            data = (row['serial_no'], np.array([row['delta_tof'], row['signal_level'], row['x'], row['y'], row['gps_theta'], row['gps_vel']]), np.array([row['gps_distance'], row['gps_speed']]))
             pf.queue_correction(timestamp, data)
         
         return pf
@@ -195,7 +196,10 @@ class ParticleFilter(Filter):
 
     def _correction_step(self, timestamp, data, dt):
         super()._correction_step(timestamp, data, dt)
-        serial_no, (delta_tof, signal_level, *hydrophone_state) = data
+
+        # have pass in the groundtruth here
+        # serial_no
+        serial_no, (delta_tof, signal_level, *hydrophone_state), groundtruth = data
 
         # Update the appropriate kalman filter
         if serial_no in self._filters:
@@ -206,9 +210,14 @@ class ParticleFilter(Filter):
         kf.iterate()
 
         # Unpack the measurement data from the kalman filter and the cached hydrophone state data
-        (r, r_dot) = kf.get_state()
-        measurement = np.array([r, r_dot])
-        measurement_cov = kf.get_state_cov()
+        (r, r_dot) = kf.get_state() # TODO: have a flag in particle filter 
+
+        # measurement = np.array([r, r_dot])
+        # measurement_cov = kf.get_state_cov()
+
+        measurement = groundtruth
+        measurement_cov = np.array([[1,0],[0,1]])
+
         x, y, theta, v = hydrophone_state
         vx = v * np.cos(theta)
         vy = v * np.sin(theta)
@@ -224,8 +233,16 @@ class ParticleFilter(Filter):
         r_pred = np.sqrt(np.square(x_diff) + np.square(y_diff))
         r_dot_pred = (x_diff * (vx - tag_vx) + y_diff * (vy - tag_vy)) / r_pred
 
+        r_truth, r_dot_truth = measurement
+        # print("r_truth", r_truth)
+        # print("r_dot_truth", r_dot_truth)
+        # print("r_pred", r_pred[0])
+        # print("r_dot_pred", r_dot_pred[0])
+        
         # Compute weights
         x = np.column_stack([r_pred, r_dot_pred])
+        # x = np.column_stack([r_truth, r_dot_truth])
+
         try:
             dist = multivariate_normal(measurement, measurement_cov)
         except scipy.linalg.LinAlgError as err:
@@ -234,6 +251,11 @@ class ParticleFilter(Filter):
             dist = multivariate_normal(measurement, measurement_cov, allow_singular=True)
         weight = dist.pdf(x)
         
+        index = np.argmax(weight)
+        # print(r_pred[index],r_dot_pred[index], r_truth, r_dot_truth, weight[index])
+        # print(r_pred,r_dot_pred, r_truth, r_dot_truth, weight)
+        print()
+
         # Resample if possible
         if np.sum(np.isnan(weight)) == 0:
             self._particles[:, -1] = weight
@@ -259,6 +281,12 @@ if __name__ == '__main__':
         'VR100': {'m': -0.10527966, 'l': -0.55164737, 'b': 68.59493072, 'signal_var': 16.250003},
         457049: {'m': -0.20985953, 'l': 5.5568182, 'b': 76.90064068, 'signal_var': 9.400336}
     })
+
+    # df = merge_dataset('tag78_shore_2_boat_all_static_test_1')
+    # pf = ParticleFilter.from_dataset(df, 65478, 10, RandomMotionModel, save_history=True, hydrophone_params={
+    #     'VR100': {'m': -0.10527966, 'l': -0.55164737, 'b': 68.59493072, 'signal_var': 16.250003},
+    #      457049: {'m': -0.20985953, 'l': 5.5568182, 'b': 76.90064068, 'signal_var': 9.400336}
+    # })
 
     pf.run()
 

@@ -9,6 +9,8 @@ import numpy as np
 import movingpandas as mpd
 import utils
 import bisect
+import datetime as datetime
+import pandas as pd
 
 def plot_df(pf, df, save_to=None, plot_avg=True, msg = '', bbox=None, padding=1.1, show=True, square=False):
     fig = plt.figure()
@@ -22,7 +24,9 @@ def plot_df(pf, df, save_to=None, plot_avg=True, msg = '', bbox=None, padding=1.
     particles, = ax.plot([], [], linestyle='None', marker='o', color='gold', label='particles')
 
     # Create relevant trajectories
+
     origin = (10.9262055, -85.7966545)
+    # origin = (10.92378733, -85.79437267) # for the 
     groundtruth_traj = mpd.Trajectory(df.set_index('datetime'), 'tag_traj', x='tag_longitude', y='tag_latitude')
     hydrophone_trajs = {}
     for serial_no in df['serial_no'].unique():
@@ -34,9 +38,10 @@ def plot_df(pf, df, save_to=None, plot_avg=True, msg = '', bbox=None, padding=1.
     if origin is not None:
         coord_bounds = utils.to_coords(cartesian_bounds, origin)
         (south, west), (north, east) = coord_bounds
-        img, ext = utils.bounds2img(west, south, east, north, zoom=17, map_dir='../maps/OpenStreetMap/Mapnik')
-        true_ext = utils.to_cartesian(np.flip(np.array(ext).reshape(2, 2), axis=0), origin).T.flatten()
-    background = ax.imshow(img, extent=true_ext)
+        # img, ext = utils.bounds2img(west, south, east, north, zoom=17, map_dir='../maps/OpenStreetMap/Mapnik')
+        # true_ext = utils.to_cartesian(np.flip(np.array(ext).reshape(2, 2), axis=0), origin).T.flatten()
+    # background = ax.imshow(img, extent=true_ext)
+    background = ax.imshow([[]])
 
     groundtruth_path_x = []
     groundtruth_path_y = []
@@ -108,12 +113,40 @@ def plot_df(pf, df, save_to=None, plot_avg=True, msg = '', bbox=None, padding=1.
         for serial_no, hydrophone in hydrophones.items():
             hydrophone_traj = hydrophone_trajs[serial_no]
             curr_time = pf._time_history[frame]
-            pos = hydrophone_traj.get_position_at(curr_time)
+            start_time = curr_time - pd.Timedelta(seconds=8)
+            end_time = curr_time + pd.Timedelta(seconds=8)
+
+            pos = hydrophone_traj.get_position_at(curr_time) #interpolation is default
             pos = utils.to_cartesian((pos.y, pos.x), origin)
+
+            print("position")
+            print(type(pos), pos) # numpy array (2x1) []
+
             hydrophone.set_data([pos[0]], [pos[1]])
-            idx = bisect.bisect(hydrophone_traj.df.index, curr_time) - 1
-            r = hydrophone_traj.df.iloc[idx]['gps_distance']
-            hydrophone_circles[serial_no].set(center=pos, radius=r)
+            idx = bisect.bisect(hydrophone_traj.df.index, curr_time) - 1 
+
+            print("idx", idx)
+            print(hydrophone_traj.df.index, type(hydrophone_traj.df.index))
+            print(curr_time, type(curr_time))
+
+            # hydrophone_traj.df.index is DatetimeIndex
+            # curr_time is timestamps pandas
+
+            time_range_array = (start_time <= hydrophone_traj.df.index) & (hydrophone_traj.df.index <=end_time)
+            print(time_range_array)
+            
+            # if the datetime is within 8 seconds of the hydrophone reading
+            if any(time_range_array): 
+                r = hydrophone_traj.df.iloc[idx]['gps_distance']
+                hydrophone_circles[serial_no].set(center=pos, radius=r)
+            else: 
+                r = 0
+                pos = np.array([0,0])
+                hydrophone_circles[serial_no].set(center=pos, radius=r)
+
+            print(r, type(r))
+            print(hydrophone_circles, type(hydrophone_circles))
+
         # hydrophone1_x = pf._hydrophone_state_history[frame, 0]
         # hydrophone1_y = pf._hydrophone_state_history[frame, 1]
         # hydrophone2_x = pf._hydrophone_state_history[frame, 4]
