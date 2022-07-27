@@ -6,9 +6,11 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 import numpy as np
-from filter import Filter
+import movingpandas as mpd
+import utils
+import bisect
 
-def plot_df(pf, groundtruth_path_data, save_to=None, plot_avg=True, msg = '', bbox=None, padding=1.1, show=True, square=False):
+def plot_df(pf, df, save_to=None, plot_avg=True, msg = '', bbox=None, padding=1.1, show=True, square=False):
     fig = plt.figure()
     ax = fig.add_subplot(111)
 
@@ -19,39 +21,49 @@ def plot_df(pf, groundtruth_path_data, save_to=None, plot_avg=True, msg = '', bb
 
     particles, = ax.plot([], [], linestyle='None', marker='o', color='gold', label='particles')
 
+    # Create relevant trajectories
+    origin = (10.9262055, -85.7966545)
+    groundtruth_traj = mpd.Trajectory(df.set_index('datetime'), 'tag_traj', x='tag_longitude', y='tag_latitude')
+    hydrophone_trajs = {}
+    for serial_no in df['serial_no'].unique():
+        hydrophone_trajs[serial_no] = mpd.Trajectory(df[df['serial_no'] == serial_no].set_index('datetime'), '{}_traj'.format(serial_no), x='longitude', y='latitude')
+
+    # Download map tiles for the background
+    cartesian_bounds = np.array(bbox).reshape(2, 2).T
+    cartesian_bounds = utils.pad_bounds(cartesian_bounds.T, f=2).T
+    if origin is not None:
+        coord_bounds = utils.to_coords(cartesian_bounds, origin)
+        (south, west), (north, east) = coord_bounds
+        img, ext = utils.bounds2img(west, south, east, north, zoom=17, map_dir='../maps/OpenStreetMap/Mapnik')
+        true_ext = utils.to_cartesian(np.flip(np.array(ext).reshape(2, 2), axis=0), origin).T.flatten()
+    background = ax.imshow(img, extent=true_ext)
+
     groundtruth_path_x = []
     groundtruth_path_y = []
     groundtruth_path, = ax.plot([], [], 'bo', label='true path')
-
-    measurements_x = []
-    measurements_y = []
-    measurements, = ax.plot([], [], linestyle='None', marker='o', color='darkorange', label='measurements')
 
     best_particle_path_x = []
     best_particle_path_y = []
     best_particle_path, = ax.plot([], [], 'r-', label='est path')
     best_particle_path_2, = ax.plot([], [], linestyle='None', marker='.', color='red')
 
-    hydrophone1, = ax.plot([], [], linestyle='None', marker='o', label='hydrophone 1')
-    hydrophone2, = ax.plot([], [], linestyle='None', marker='o', label='hydrophone 2')
-    hydrophone1_range = mpl.patches.Circle((0, 0), 0, fill=False, linewidth=1)
-    hydrophone2_range = mpl.patches.Circle((0, 0), 0, fill=False, linewidth=1)
-
-    ax.add_patch(hydrophone1_range)
-    ax.add_patch(hydrophone2_range)
+    hydrophones = {}
+    hydrophone_circles = {}
+    for serial_no in hydrophone_trajs.keys():
+        hydrophones[serial_no], = ax.plot([], [], linestyle='None', marker='o', label=str(serial_no))
+        hydrophone_circles[serial_no] = mpl.patches.Circle((0, 0), 0, fill=False, linewidth=1)
+        ax.add_patch(hydrophone_circles[serial_no])
 
     steps = ax.text(3, 6, "Step = 0 / " + str(num_steps), horizontalalignment="center", verticalalignment="top")
     ax.legend()
 
     # Artists indexed later are drawn over ones indexed earlier
     artists = [
-        hydrophone1_range,
-        hydrophone2_range,
-        hydrophone1,
-        hydrophone2,
+        background,
+        *hydrophones.values(),
+        *hydrophone_circles.values(),
         best_particle_path_2,
         best_particle_path,
-        measurements,
         groundtruth_path,
         particles,
         steps
@@ -74,8 +86,6 @@ def plot_df(pf, groundtruth_path_data, save_to=None, plot_avg=True, msg = '', bb
             groundtruth_path_y.clear()
             best_particle_path_x.clear()
             best_particle_path_y.clear()
-            measurements_x.clear()
-            measurements_y.clear()
 
         # Plot best particle path
         if plot_avg:
@@ -85,28 +95,33 @@ def plot_df(pf, groundtruth_path_data, save_to=None, plot_avg=True, msg = '', bb
             best_particle_path_2.set_data(best_particle_path_x, best_particle_path_y)
 
         # Plot groundtruth path
-        groundtruth_path_x.append(groundtruth_path_data[frame, 0])
-        groundtruth_path_y.append(groundtruth_path_data[frame, 1])
+        pos = groundtruth_traj.get_position_at(pf._time_history[frame])
+        pos = utils.to_cartesian((pos.y, pos.x), origin)
+        groundtruth_path_x.append(pos[0])
+        groundtruth_path_y.append(pos[1])
         groundtruth_path.set_data(groundtruth_path_x, groundtruth_path_y) # can we set them directly> groundtruth_path[:t,0]
-
-        # Plot measurements
-        if groundtruth_path_data[frame, 5] == 1:
-            measurements_x.append(groundtruth_path_data[frame, 0])
-            measurements_y.append(groundtruth_path_data[frame, 1])
-            measurements.set_data(measurements_x, measurements_y)
 
         # Plot other particles poses
         particles.set_data(pf._history[frame, :, 0], pf._history[frame, :, 1])
 
         # Plot hydrophones
-        hydrophone1_x = pf._hydrophone_state_history[frame, 0]
-        hydrophone1_y = pf._hydrophone_state_history[frame, 1]
-        hydrophone2_x = pf._hydrophone_state_history[frame, 4]
-        hydrophone2_y = pf._hydrophone_state_history[frame, 5]
-        hydrophone1.set_data([hydrophone1_x], [hydrophone1_y])
-        hydrophone2.set_data([hydrophone2_x], [hydrophone2_y])
-        hydrophone1_range.set(center=(hydrophone1_x, hydrophone1_y), radius=pf._kf1_history[frame, 0])
-        hydrophone2_range.set(center=(hydrophone2_x, hydrophone2_y), radius=pf._kf2_history[frame, 0])
+        for serial_no, hydrophone in hydrophones.items():
+            hydrophone_traj = hydrophone_trajs[serial_no]
+            curr_time = pf._time_history[frame]
+            pos = hydrophone_traj.get_position_at(curr_time)
+            pos = utils.to_cartesian((pos.y, pos.x), origin)
+            hydrophone.set_data([pos[0]], [pos[1]])
+            idx = bisect.bisect(hydrophone_traj.df.index, curr_time) - 1
+            r = hydrophone_traj.df.iloc[idx]['gps_distance']
+            hydrophone_circles[serial_no].set(center=pos, radius=r)
+        # hydrophone1_x = pf._hydrophone_state_history[frame, 0]
+        # hydrophone1_y = pf._hydrophone_state_history[frame, 1]
+        # hydrophone2_x = pf._hydrophone_state_history[frame, 4]
+        # hydrophone2_y = pf._hydrophone_state_history[frame, 5]
+        # hydrophone1.set_data([hydrophone1_x], [hydrophone1_y])
+        # hydrophone2.set_data([hydrophone2_x], [hydrophone2_y])
+        # hydrophone1_range.set(center=(hydrophone1_x, hydrophone1_y), radius=pf._kf1_history[frame, 0])
+        # hydrophone2_range.set(center=(hydrophone2_x, hydrophone2_y), radius=pf._kf2_history[frame, 0])
 
         # Update title
         if frame/num_steps > .9:
@@ -117,7 +132,7 @@ def plot_df(pf, groundtruth_path_data, save_to=None, plot_avg=True, msg = '', bb
         # Return changed artists?
         return artists
 
-    anim = animation.FuncAnimation(fig, update, frames=range(0, num_steps, 1), init_func = init, blit=False, interval = 33, repeat=True)
+    anim = animation.FuncAnimation(fig, update, frames=range(0, num_steps, 10), init_func = init, blit=False, interval = 33, repeat=True)
     
     # Get bounding box or use default values
     if bbox:

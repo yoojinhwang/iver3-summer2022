@@ -1,6 +1,6 @@
 from events import EventDispatcher
 from abc import abstractmethod
-import bisect
+from SortedCollection import SortedCollection
 
 class Filter(EventDispatcher):
     PREDICTION = 0
@@ -14,7 +14,7 @@ class Filter(EventDispatcher):
         self.reset()
 
     def reset(self):
-        self._queue = []
+        self._queue = SortedCollection([], key=Filter._insort_key)
         self._current_time = None
         self._last_step_time = None
         self._last_prediction_time = None
@@ -22,11 +22,11 @@ class Filter(EventDispatcher):
 
     def queue_prediction(self, timestamp, data):
         step = (Filter.PREDICTION, (timestamp, data))
-        bisect.insort(self._queue, step, key=Filter._insort_key)
+        self._queue.insert(step)
     
     def queue_correction(self, timestamp, data):
         step = (Filter.CORRECTION, (timestamp, data))
-        bisect.insort(self._queue, step, key=Filter._insort_key)
+        self._queue.insert(step)
     
     @abstractmethod
     def _prediction_step(self, timestamp, data, dt):

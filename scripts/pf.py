@@ -275,22 +275,22 @@ if __name__ == '__main__':
     pf._kf2._b = 76.90064068
     pf._kf2._signal_var = 9.400336
 
-    pf.run()
+    # pf.run()
 
-    # Extract all x and y values from the particle filter's history to create a bounding box for the plot
-    x = np.concatenate([pf._history[:, :, 0].flatten(), pf._hydrophone_state_history[:, [0, 4]].flatten()])
-    x = x[~np.isnan(x)]
-    y = np.concatenate([pf._history[:, :, 1].flatten(), pf._hydrophone_state_history[:, [1, 5]].flatten()])
-    y = y[~np.isnan(y)]
-    bbox = (np.min(x), np.min(y), np.max(x), np.max(y))
+    # # Extract all x and y values from the particle filter's history to create a bounding box for the plot
+    # x = np.concatenate([pf._history[:, :, 0].flatten(), pf._hydrophone_state_history[:, [0, 4]].flatten()])
+    # x = x[~np.isnan(x)]
+    # y = np.concatenate([pf._history[:, :, 1].flatten(), pf._hydrophone_state_history[:, [1, 5]].flatten()])
+    # y = y[~np.isnan(y)]
+    # bbox = (np.min(x), np.min(y), np.max(x), np.max(y))
 
-    # Get groundtruth data
-    groundtruth_path = np.zeros((len(pf._time_history), 6))
-    groundtruth_state1 = np.column_stack([data1['gps_distance'], data1['gps_speed']])
-    groundtruth_state2 = np.column_stack([data2['gps_distance'], data2['gps_speed']])
-    pf._kf1.plot(groundtruth_state1, datapath1, save=True, replace=replace)
-    pf._kf2.plot(groundtruth_state2, datapath2, save=True, replace=replace)
+    # # Get groundtruth data
+    # groundtruth_path = np.zeros((len(pf._time_history), 6))
+    # groundtruth_state1 = np.column_stack([data1['gps_distance'], data1['gps_speed']])
+    # groundtruth_state2 = np.column_stack([data2['gps_distance'], data2['gps_speed']])
+    # pf._kf1.plot(groundtruth_state1, datapath1, save=True, replace=replace)
+    # pf._kf2.plot(groundtruth_state2, datapath2, save=True, replace=replace)
 
-    # Create the plot
-    savepath = utils.get_savepath(datapath1, '_particle_filter', extension='gif', replace=replace)
-    plot_df(pf, groundtruth_path, bbox=bbox, square=True, save_to=savepath)
+    # # Create the plot
+    # savepath = utils.get_savepath(datapath1, '_particle_filter', extension='gif', replace=replace)
+    # plot_df(pf, groundtruth_path, bbox=bbox, square=True, save_to=savepath)

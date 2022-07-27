@@ -11,7 +11,7 @@ tag77_air_callibration_0:
     hydrophones:
         457049:
             path: '05-26-2022/tag77_0m_air_test_0.csv'
-    tag: 65477
+    tag_id: 65477
 
 # Useful for: period measurement
 tag78_air_callibration_0:
@@ -22,7 +22,7 @@ tag78_air_callibration_0:
     hydrophones:
         457049:
             path: '05-26-2022/tag78_0m_air_test_0.csv'
-    tag: 65478
+    tag_id: 65478
 
 # Useful for: period measurement
 tag78_air_callibration_1:
@@ -43,7 +43,7 @@ tag79_air_callibration_0:
     hydrophones:
         457049:
             path: '05-26-2022/tag79_0m_air_test_0.csv'
-    tag: 65479
+    tag_id: 65479
 
 # We don't have paired data from the other hydrophone
 tag78_50m_increment_long_beach_test_457012_2:
@@ -55,8 +55,11 @@ tag78_50m_increment_long_beach_test_457012_2:
         457012:
             path: '06-01-2022/tag78_50m_increment_long_beach_test_457012_2.csv'
             log_path: '../data\06-01-2022\20220601-155249-CH_Long_Beach_Mission_05_31_2022-IVER3-3013\Logs\20220601-155325--CH_Long_Beach_Mission_05_31_2022-IVER3-3013.log'
-    tag: 65478
+    tag_id: 65478
     tag_coords:
+        latitude: 33.7421588
+        longitude: -118.12206
+    origin:
         latitude: 33.7421588
         longitude: -118.12206
 
@@ -70,8 +73,11 @@ tag78_50m_increment_long_beach_test_3:
         457012:
             path: '06-01-2022/tag78_50m_increment_long_beach_test_457012_3.csv'
             log_path: '../data/06-01-2022/20220601-164716-CH_Long_Beach_Mission_05_31_2022-IVER3-3013/Logs/20220601-164722--CH_Long_Beach_Mission_05_31_2022-IVER3-3013.log'
-    tag: 65478
+    tag_id: 65478
     tag_coords:
+        latitude: 33.7421588
+        longitude: -118.12206
+    origin:
         latitude: 33.7421588
         longitude: -118.12206
 
@@ -90,8 +96,11 @@ tag78_50m_increment_long_beach_test_0:
                 '../data\06-08-2022\20220608-153927-CH_Long_Beach_Mission_0_06_07_2022-IVER3-3013\Logs\20220608-153932--CH_Long_Beach_Mission_0_06_07_2022-IVER3-3013.log',
                 '../data\06-08-2022\20220608-154731-CH_Long_Beach_Mission_0_06_07_2022-IVER3-3013\Logs\20220608-154736--CH_Long_Beach_Mission_0_06_07_2022-IVER3-3013.log'
             ]
-    tag: 65478
+    tag_id: 65478
     tag_coords:
+        latitude: 33.7421588
+        longitude: -118.12206
+    origin:
         latitude: 33.7421588
         longitude: -118.12206
 
@@ -107,10 +116,13 @@ tag78_cowling_none_long_beach_test:
         457012:
             path: '06-08-2022/tag78_cowling_none_long_beach_test_457012_0.csv'
             log_path: '../data\06-08-2022\20220608-171235-CH_Long_Beach_Mission_1_06_07_2022-IVER3-3013\Logs\20220608-171318--CH_Long_Beach_Mission_1_06_07_2022-IVER3-3013.log'
-    tag: 65478
+    tag_id: 65478
     tag_coords:
         latitude: 33.7421588
         longitude: -118.12206
+    origin:
+        latitude: 10.92378733
+        longitude: -85.79437267
 
 # Can be used with the Kalman and Particle filters
 tag78_drift_test_0:
@@ -123,8 +135,11 @@ tag78_drift_test_0:
             path: '07-18-2022/tag78_drift_test_457049_0.csv'
         VR100:
             path: '07-18-2022/tag78_drift_test_VR100_0.csv'
-    tag: 65478
+    tag_id: 65478
     tag_coords:
+        latitude: 10.92378733
+        longitude: -85.79437267
+    origin:
         latitude: 10.92378733
         longitude: -85.79437267
 
@@ -139,8 +154,11 @@ tag78_shore_2_boat_all_static_test_0:
             path: '07-18-2022/tag78_shore_2_boat_all_static_test_457049_0.csv'
         VR100:
             path: '07-18-2022/tag78_shore_2_boat_all_static_test_VR100_0.csv'
-    tag: 65478
+    tag_id: 65478
     tag_coords:
+        latitude: 10.92378733
+        longitude: -85.79437267
+    origin:
         latitude: 10.92378733
         longitude: -85.79437267
 
@@ -155,8 +173,11 @@ tag78_shore_2_boat_all_static_test_1:
             path: '07-18-2022/tag78_shore_2_boat_all_static_test_457049_1.csv'
         VR100:
             path: '07-18-2022/tag78_shore_2_boat_all_static_test_VR100_1.csv'
-    tag: 65478
+    tag_id: 65478
     tag_coords:
+        latitude: 10.924123
+        longitude: -85.7945185
+    origin:
         latitude: 10.924123
         longitude: -85.7945185
 
@@ -171,8 +192,11 @@ tag78_shore_2_boat_all_static_test_0:
             path: '07-19-2022/tag78_shore_2_boat_all_static_test_457049_0.csv'
         VR100:
             path: '07-19-2022/tag78_shore_2_boat_all_static_test_VR100_0.csv'
-    tag: 65478
+    tag_id: 65478
     tag_coords:
+        latitude: 10.9247035
+        longitude: -85.79533716666667
+    origin:
         latitude: 10.9247035
         longitude: -85.79533716666667
 
@@ -187,9 +211,12 @@ tag78_swimming_test_0:
             path: '07-18-2022/tag78_swimming_test_457049_0.csv'
         VR100:
             path: '07-18-2022/tag78_swimming_test_VR100_0.csv'
-    tag: 65478
+    tag_id: 65478
     tag_coords:
         path: '07-18-2022/tag78_swimming_test_tag_coords_0.csv'
+
+# Longest span without gaps greater than:
+#    1 minute: 2022-07-21 09:44:38 to 2022-07-21 09:51:11
 
 tag78_swimming_test_1:
     type: 'two_hydrophones'
@@ -205,6 +232,9 @@ tag78_swimming_test_1:
             ]
         VR100:
             path: '07-21-2022/tag78_swimming_test_VR100_1.csv'
-    tag: 65478
+    tag_id: 65478
     tag_coords:
         path: '07-21-2022/tag78_swimming_test_tag_coords_1.csv'
+    origin:
+        latitude: 10.9262055
+        longitude: -85.7966545

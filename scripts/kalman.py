@@ -32,24 +32,24 @@ class KalmanFilter(Filter):
 
         return kf
 
-    def __init__(self, save_history=False):
+    def __init__(self, save_history=False, **kwargs):
         self._save_history = save_history
         super().__init__()
 
         self._speed_of_sound = 1460  # speed of sound in water (m/s)
 
-        self._l = -1.36582584
-        self._m = -0.064755099  # conversion between distance (m) and signal intensity (dB)
-        self._b = 77.7946280  # intercept for conversion between distance and signal intensity
+        self._m = kwargs.get('m', -0.064755099)  # conversion between distance (m) and signal intensity (dB)
+        self._l = kwargs.get('l', -1.36582584)  # conversion between speed (m/s) and signal intensity (dB)
+        self._b = kwargs.get('b', 77.7946280)  # intercept for conversion between distance and signal intensity
 
-        self._delta_tof_var = 0.0005444242032405411**2  # variance in the tag's time of flight when stationary (s)
+        self._delta_tof_var = kwargs.get('delta_tof_var', 0.0005444242032405411**2)  # variance in the tag's time of flight when stationary (s)
         # self._delta_tof_var = 1e-6
         # self._signal_var = 5.513502243014629**2  # variance in the signal intensity not explained by distance
-        self._signal_var = 15.297
+        self._signal_var = kwargs.get('signal_var', 15.297)
 
-        self._distance_var = 1e-3
+        self._distance_var = kwargs.get('distance_var', 1e-3)
         # self._velocity_var = 0.0604
-        self._velocity_var = 1
+        self._velocity_var = kwargs.get('velocity_var', 1)
 
     def reset(self):
         super().reset()

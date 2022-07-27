@@ -7,3 +7,6 @@ matplotlib
 seaborn
 scipy
 geopy
+mercantile
+contextily
+pyyaml
