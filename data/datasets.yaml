@@ -121,8 +121,8 @@ tag78_cowling_none_long_beach_test:
         latitude: 33.7421588
         longitude: -118.12206
     origin:
-        latitude: 10.92378733
-        longitude: -85.79437267
+        latitude: 33.7421588
+        longitude: -118.12206
 
 # Can be used with the Kalman and Particle filters
 tag78_drift_test_0:

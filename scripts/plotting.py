@@ -25,13 +25,24 @@ def plot_df(pf, df, save_to=None, plot_avg=True, msg = '', bbox=None, padding=1.
 
     # Create relevant trajectories
 
-    origin = (10.9262055, -85.7966545)
-    # origin = (10.92378733, -85.79437267) # for the 
+    # origin = (10.9262055, -85.7966545)
+    # origin = (10.92378733, -85.79437267)
+    origin = (33.7421588, -118.12206)
     groundtruth_traj = mpd.Trajectory(df.set_index('datetime'), 'tag_traj', x='tag_longitude', y='tag_latitude')
     hydrophone_trajs = {}
+
+    df.to_csv('../data/06-08-2022/all_hydrophone.csv')
+
+    df = df[df['longitude'].notnull()]
+
+    print("UNIQUE", df['serial_no'].unique())
     for serial_no in df['serial_no'].unique():
+        print(serial_no)
         hydrophone_trajs[serial_no] = mpd.Trajectory(df[df['serial_no'] == serial_no].set_index('datetime'), '{}_traj'.format(serial_no), x='longitude', y='latitude')
 
+    # print("HYDROPHONE TRAJs", hydrophone_trajs[457049])
+    # print("receiver 457012")
+    # print("HYDROPHONE TRAJs", hydrophone_trajs[457012])
     # Download map tiles for the background
     cartesian_bounds = np.array(bbox).reshape(2, 2).T
     cartesian_bounds = utils.pad_bounds(cartesian_bounds.T, f=2).T
@@ -111,13 +122,23 @@ def plot_df(pf, df, save_to=None, plot_avg=True, msg = '', bbox=None, padding=1.
 
         # Plot hydrophones
         for serial_no, hydrophone in hydrophones.items():
+            print("serial no", serial_no)
+            print("hydrophone", hydrophone)
             hydrophone_traj = hydrophone_trajs[serial_no]
             curr_time = pf._time_history[frame]
+            print("curr_time", curr_time)
             start_time = curr_time - pd.Timedelta(seconds=8)
             end_time = curr_time + pd.Timedelta(seconds=8)
 
+            # issue: pos is empty
+            # If it’s before then I would just check for that and not skip over the plotting stuff there, since it wouldn’t make sense to try to display something
+            # Or maybe display the hydrophone’s first position
+
+            print("hydrophone traj", hydrophone_traj)
+            
             pos = hydrophone_traj.get_position_at(curr_time) #interpolation is default
             pos = utils.to_cartesian((pos.y, pos.x), origin)
+            print("pos,x,y", pos)
 
             print("position")
             print(type(pos), pos) # numpy array (2x1) []
@@ -126,6 +147,7 @@ def plot_df(pf, df, save_to=None, plot_avg=True, msg = '', bbox=None, padding=1.
             idx = bisect.bisect(hydrophone_traj.df.index, curr_time) - 1 
 
             print("idx", idx)
+            print("hydrophone traj", hydrophone_traj)
             print(hydrophone_traj.df.index, type(hydrophone_traj.df.index))
             print(curr_time, type(curr_time))
 
@@ -156,6 +178,7 @@ def plot_df(pf, df, save_to=None, plot_avg=True, msg = '', bbox=None, padding=1.
         # hydrophone1_range.set(center=(hydrophone1_x, hydrophone1_y), radius=pf._kf1_history[frame, 0])
         # hydrophone2_range.set(center=(hydrophone2_x, hydrophone2_y), radius=pf._kf2_history[frame, 0])
 
+        print("here")
         # Update title
         if frame/num_steps > .9:
             steps.set_text('')
@@ -165,6 +188,7 @@ def plot_df(pf, df, save_to=None, plot_avg=True, msg = '', bbox=None, padding=1.
         # Return changed artists?
         return artists
 
+    print("animation")
     anim = animation.FuncAnimation(fig, update, frames=range(0, num_steps, 10), init_func = init, blit=False, interval = 33, repeat=True)
     
     # Get bounding box or use default values
