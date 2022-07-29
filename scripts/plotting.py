@@ -18,6 +18,18 @@ def plot_df(pf, df, save_to=None, plot_avg=True, msg = '', bbox=None, padding=1.
 
     avg_particle = np.average(pf._history, axis=1)
 
+    print(avg_particle)
+
+    # data = {
+    #     'average particle': [],
+    # }
+
+    # print(len(data))
+
+    # df_avg = pd.DataFrame(data)
+    # df_avg['average particle'] = avg_particle
+    # df_avg.to_csv('dataframe_avg.csv')
+
     num_particles = pf._num_particles
     num_steps = len(pf._history)
 
@@ -31,7 +43,7 @@ def plot_df(pf, df, save_to=None, plot_avg=True, msg = '', bbox=None, padding=1.
     groundtruth_traj = mpd.Trajectory(df.set_index('datetime'), 'tag_traj', x='tag_longitude', y='tag_latitude')
     hydrophone_trajs = {}
 
-    df.to_csv('../data/06-08-2022/all_hydrophone.csv')
+    # df.to_csv('../data/06-08-2022/all_hydrophone.csv')
 
     df = df[df['longitude'].notnull()]
 
@@ -54,10 +66,6 @@ def plot_df(pf, df, save_to=None, plot_avg=True, msg = '', bbox=None, padding=1.
     # background = ax.imshow(img, extent=true_ext)
     background = ax.imshow([[]])
 
-    groundtruth_path_x = []
-    groundtruth_path_y = []
-    groundtruth_path, = ax.plot([], [], 'bo', label='true path')
-
     best_particle_path_x = []
     best_particle_path_y = []
     best_particle_path, = ax.plot([], [], 'r-', label='est path')
@@ -69,6 +77,10 @@ def plot_df(pf, df, save_to=None, plot_avg=True, msg = '', bbox=None, padding=1.
         hydrophones[serial_no], = ax.plot([], [], linestyle='None', marker='o', label=str(serial_no))
         hydrophone_circles[serial_no] = mpl.patches.Circle((0, 0), 0, fill=False, linewidth=1)
         ax.add_patch(hydrophone_circles[serial_no])
+
+    groundtruth_path_x = []
+    groundtruth_path_y = []
+    groundtruth_path, = ax.plot([], [], 'bo', label='true path')
 
     steps = ax.text(3, 6, "Step = 0 / " + str(num_steps), horizontalalignment="center", verticalalignment="top")
     ax.legend()
@@ -122,40 +134,21 @@ def plot_df(pf, df, save_to=None, plot_avg=True, msg = '', bbox=None, padding=1.
 
         # Plot hydrophones
         for serial_no, hydrophone in hydrophones.items():
-            print("serial no", serial_no)
-            print("hydrophone", hydrophone)
             hydrophone_traj = hydrophone_trajs[serial_no]
             curr_time = pf._time_history[frame]
-            print("curr_time", curr_time)
             start_time = curr_time - pd.Timedelta(seconds=8)
             end_time = curr_time + pd.Timedelta(seconds=8)
-
-            # issue: pos is empty
-            # If it’s before then I would just check for that and not skip over the plotting stuff there, since it wouldn’t make sense to try to display something
-            # Or maybe display the hydrophone’s first position
-
-            print("hydrophone traj", hydrophone_traj)
             
             pos = hydrophone_traj.get_position_at(curr_time) #interpolation is default
             pos = utils.to_cartesian((pos.y, pos.x), origin)
-            print("pos,x,y", pos)
-
-            print("position")
-            print(type(pos), pos) # numpy array (2x1) []
 
             hydrophone.set_data([pos[0]], [pos[1]])
             idx = bisect.bisect(hydrophone_traj.df.index, curr_time) - 1 
-
-            print("idx", idx)
-            print("hydrophone traj", hydrophone_traj)
-            print(hydrophone_traj.df.index, type(hydrophone_traj.df.index))
-            print(curr_time, type(curr_time))
 
             # hydrophone_traj.df.index is DatetimeIndex
             # curr_time is timestamps pandas
 
             time_range_array = (start_time <= hydrophone_traj.df.index) & (hydrophone_traj.df.index <=end_time)
-            print(time_range_array)
             
             # if the datetime is within 8 seconds of the hydrophone reading
             if any(time_range_array): 
@@ -166,9 +159,6 @@ def plot_df(pf, df, save_to=None, plot_avg=True, msg = '', bbox=None, padding=1.
                 pos = np.array([0,0])
                 hydrophone_circles[serial_no].set(center=pos, radius=r)
 
-            print(r, type(r))
-            print(hydrophone_circles, type(hydrophone_circles))
-
         # hydrophone1_x = pf._hydrophone_state_history[frame, 0]
         # hydrophone1_y = pf._hydrophone_state_history[frame, 1]
         # hydrophone2_x = pf._hydrophone_state_history[frame, 4]
@@ -178,7 +168,6 @@ def plot_df(pf, df, save_to=None, plot_avg=True, msg = '', bbox=None, padding=1.
         # hydrophone1_range.set(center=(hydrophone1_x, hydrophone1_y), radius=pf._kf1_history[frame, 0])
         # hydrophone2_range.set(center=(hydrophone2_x, hydrophone2_y), radius=pf._kf2_history[frame, 0])
 
-        print("here")
         # Update title
         if frame/num_steps > .9:
             steps.set_text('')
@@ -187,6 +176,37 @@ def plot_df(pf, df, save_to=None, plot_avg=True, msg = '', bbox=None, padding=1.
 
         # Return changed artists?
         return artists
+
+    # Plotting error plot versus time
+    x = range(0, num_steps,10)
+    for i in x: 
+        print(i)
+        update(i)
+
+    # error plot
+    data = {
+        'Groundtruth X': [],
+        'Groundtruth Y': [],
+        'Best Particle Path X': [],
+        'Best Particle Path Y': []
+    }
+
+    df_error = pd.DataFrame(data)
+    df_error['Groundtruth X'] = groundtruth_path_x
+    df_error['Groundtruth Y'] = groundtruth_path_y
+    df_error['Best Particle Path X'] = best_particle_path_x
+    df_error['Best Particle Path Y'] = best_particle_path_y
+    df_error.to_csv('dataframe_error.csv')
+
+    # fig = plt.figure()
+    # ax2 = fig.add_subplot(111)
+    print(groundtruth_path_x)
+    print(best_particle_path_x)
+    # ax2.plot(best_particle_path_x, best_particle_path_y)
+    # ax2.plot(groundtruth_path_x, groundtruth_path_y)
+    # ax2.clear()
+    # ax2.set_title("Groundtruth and Best Particle Path")
+    # plt.show()
 
     print("animation")
     anim = animation.FuncAnimation(fig, update, frames=range(0, num_steps, 10), init_func = init, blit=False, interval = 33, repeat=True)
@@ -229,3 +249,11 @@ def data_to_axis_units(x_data, fig, ax):
     ppd = 72 / fig.dpi
     trans = ax.transData.transform
     return ((trans((1, x_data)) - trans((0, 0))) * ppd)[1]
+
+def error_plot(): 
+    """
+    Plots the error between the groundtruth and the best particle output
+    """
+
+    # have it run through the 
+

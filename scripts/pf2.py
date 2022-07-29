@@ -11,6 +11,8 @@ from scipy.stats import multivariate_normal
 from plotting import plot_df
 from merge_dataset import merge_dataset
 
+# resample, after a long time -- keep the particle with the largest weight (guarantee)
+
 class MotionModelBase(ABC):
     '''
     Provides motion model functions
@@ -48,9 +50,9 @@ class RandomMotionModel(MotionModelBase):
         kwargs['name'] = 'random'
         super().__init__(6, **kwargs)
         self._x_mean = kwargs.get('x_mean', 0)
-        self._x_stdev = kwargs.get('x_stdev', 50)
+        self._x_stdev = kwargs.get('x_stdev', 1)
         self._y_mean = kwargs.get('y_mean', 0)
-        self._y_stdev = kwargs.get('y_stdev', 50)
+        self._y_stdev = kwargs.get('y_stdev', 1)
     
     def initialize_particles(self, num_particles, groundtruth=None):
         return super().initialize_particles(num_particles, groundtruth=groundtruth)
@@ -126,7 +128,6 @@ class ParticleFilter(Filter):
         # Queue measurements
         for _, row in df.iterrows():
             timestamp = row['datetime']
-            # TODO: add groundtruth, unpack the values, this is what hydrophone state
             data = (row['serial_no'], np.array([row['delta_tof'], row['signal_level'], row['x'], row['y'], row['gps_theta'], row['gps_vel']]), np.array([row['gps_distance'], row['gps_speed']]))
             pf.queue_correction(timestamp, data)
         
@@ -233,7 +234,8 @@ class ParticleFilter(Filter):
         r_pred = np.sqrt(np.square(x_diff) + np.square(y_diff))
         r_dot_pred = (x_diff * (vx - tag_vx) + y_diff * (vy - tag_vy)) / r_pred
 
-        r_truth, r_dot_truth = measurement
+        # r_truth, r_dot_truth = measurement
+        r_pred, r_dot_pred = measurement
         
         # Compute weights
         x = np.column_stack([r_pred, r_dot_pred])
@@ -271,6 +273,12 @@ class ParticleFilter(Filter):
 if __name__ == '__main__':
     replace = True
 
+    # df = merge_dataset('tag78_swimming_test_0')
+    # pf = ParticleFilter.from_dataset(df, 65478, 10, RandomMotionModel, save_history=True, hydrophone_params={
+    #     'VR100': {'m': -0.10527966, 'l': -0.55164737, 'b': 68.59493072, 'signal_var': 16.250003},
+    #     457049: {'m': -0.20985953, 'l': 5.5568182, 'b': 76.90064068, 'signal_var': 9.400336}
+    # })
+
     # df = merge_dataset('tag78_swimming_test_1')
     # pf = ParticleFilter.from_dataset(df, 65478, 10, RandomMotionModel, save_history=True, hydrophone_params={
     #     'VR100': {'m': -0.10527966, 'l': -0.55164737, 'b': 68.59493072, 'signal_var': 16.250003},
@@ -278,13 +286,13 @@ if __name__ == '__main__':
     # })
 
     # df = merge_dataset('tag78_cowling_none_long_beach_test')
-    # pf = ParticleFilter.from_dataset(df, 65478, 10, RandomMotionModel, save_history=True, hydrophone_params={
+    # pf = ParticleFilter.from_dataset(df, 65478, 100, RandomMotionModel, save_history=True, hydrophone_params={
     #     457049: {'m': -0.10527966, 'l': -0.55164737, 'b': 68.59493072, 'signal_var': 16.250003},
     #     457012: {'m': -0.20985953, 'l': 5.5568182, 'b': 76.90064068, 'signal_var': 9.400336}
     # })
 
     df = merge_dataset('tag78_50m_increment_long_beach_test_0')
-    pf = ParticleFilter.from_dataset(df, 65478, 10, RandomMotionModel, save_history=True, hydrophone_params={
+    pf = ParticleFilter.from_dataset(df, 65478, 100, RandomMotionModel, save_history=True, hydrophone_params={
         457049: {'m': -0.10527966, 'l': -0.55164737, 'b': 68.59493072, 'signal_var': 16.250003},
         457012: {'m': -0.20985953, 'l': 5.5568182, 'b': 76.90064068, 'signal_var': 9.400336}
     })
@@ -316,7 +324,6 @@ if __name__ == '__main__':
     all_y = all_y[~np.isnan(all_y)]
     bbox = (np.min(all_x), np.min(all_y), np.max(all_x), np.max(all_y))
 
-    print("DF",df)
     # save to csv 
     # df.to_csv('../data/06-08-2022/all_hydrophone.csv')
 
