@@ -12,6 +12,9 @@ import bisect
 import datetime as datetime
 import pandas as pd
 
+ESTIMATED_RANGE = True
+range_df = pd.read_csv('df_range.csv') 
+
 def plot_df(pf, df, save_to=None, plot_avg=True, msg = '', bbox=None, padding=1.1, show=True, square=False):
     fig = plt.figure()
     ax = fig.add_subplot(111)
@@ -47,14 +50,10 @@ def plot_df(pf, df, save_to=None, plot_avg=True, msg = '', bbox=None, padding=1.
 
     df = df[df['longitude'].notnull()]
 
-    print("UNIQUE", df['serial_no'].unique())
     for serial_no in df['serial_no'].unique():
         print(serial_no)
         hydrophone_trajs[serial_no] = mpd.Trajectory(df[df['serial_no'] == serial_no].set_index('datetime'), '{}_traj'.format(serial_no), x='longitude', y='latitude')
 
-    # print("HYDROPHONE TRAJs", hydrophone_trajs[457049])
-    # print("receiver 457012")
-    # print("HYDROPHONE TRAJs", hydrophone_trajs[457012])
     # Download map tiles for the background
     cartesian_bounds = np.array(bbox).reshape(2, 2).T
     cartesian_bounds = utils.pad_bounds(cartesian_bounds.T, f=2).T
@@ -135,6 +134,7 @@ def plot_df(pf, df, save_to=None, plot_avg=True, msg = '', bbox=None, padding=1.
         # Plot hydrophones
         for serial_no, hydrophone in hydrophones.items():
             hydrophone_traj = hydrophone_trajs[serial_no]
+
             curr_time = pf._time_history[frame]
             start_time = curr_time - pd.Timedelta(seconds=8)
             end_time = curr_time + pd.Timedelta(seconds=8)
@@ -152,8 +152,19 @@ def plot_df(pf, df, save_to=None, plot_avg=True, msg = '', bbox=None, padding=1.
             
             # if the datetime is within 8 seconds of the hydrophone reading
             if any(time_range_array): 
-                r = hydrophone_traj.df.iloc[idx]['gps_distance']
-                hydrophone_circles[serial_no].set(center=pos, radius=r)
+                print("IDX", idx)
+                print("IDX", type(idx))
+
+                if ESTIMATED_RANGE == False: 
+                    # this is plotting the true range measurement
+                    r = range_df.iloc[idx]['Groundtruth range']
+                    # r = hydrophone_traj.df.iloc[idx]['gps_distance']
+                    hydrophone_circles[serial_no].set(center=pos, radius=r)
+                else: 
+                    # this is plotting the true range measurement
+                    r = range_df.iloc[idx]['Estimated range']
+                    hydrophone_circles[serial_no].set(center=pos, radius=r)
+
             else: 
                 r = 0
                 pos = np.array([0,0])
@@ -249,11 +260,4 @@ def data_to_axis_units(x_data, fig, ax):
     ppd = 72 / fig.dpi
     trans = ax.transData.transform
     return ((trans((1, x_data)) - trans((0, 0))) * ppd)[1]
-
-def error_plot(): 
-    """
-    Plots the error between the groundtruth and the best particle output
-    """
-
-    # have it run through the 
 

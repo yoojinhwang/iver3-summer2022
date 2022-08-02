@@ -8,10 +8,19 @@ from datetime import timedelta
 import utils
 import scipy
 from scipy.stats import multivariate_normal
-from plotting import plot_df
+from plotting import plot_df, ESTIMATED_RANGE 
 from merge_dataset import merge_dataset
+import pandas as pd
 
-# resample, after a long time -- keep the particle with the largest weight (guarantee)
+measured_truth_range = []
+measured_truth_range_der = []
+
+estimated_range = []
+estimated_range_der = []
+
+range_timestamps = []
+
+tof_distances = []
 
 class MotionModelBase(ABC):
     '''
@@ -116,7 +125,6 @@ class ParticleFilter(Filter):
         start_time = df.iloc[0]['datetime']
         end_time = df.iloc[-1]['datetime']
         num_predictions = int(np.floor((end_time - start_time).total_seconds()))
-
         pf = ParticleFilter(num_particles, motion_model_type, motion_model_params, save_history, hydrophone_params)
 
         # Queue predictions
@@ -128,7 +136,7 @@ class ParticleFilter(Filter):
         # Queue measurements
         for _, row in df.iterrows():
             timestamp = row['datetime']
-            data = (row['serial_no'], np.array([row['delta_tof'], row['signal_level'], row['x'], row['y'], row['gps_theta'], row['gps_vel']]), np.array([row['gps_distance'], row['gps_speed']]))
+            data = (row['serial_no'], np.array([row['delta_tof'], row['signal_level'], row['x'], row['y'], row['gps_theta'], row['gps_vel']]), np.array([row['gps_distance'], row['gps_speed']]), row['absolute_distance'])
             pf.queue_correction(timestamp, data)
         
         return pf
@@ -198,9 +206,8 @@ class ParticleFilter(Filter):
     def _correction_step(self, timestamp, data, dt):
         super()._correction_step(timestamp, data, dt)
 
-        # have pass in the groundtruth here
         # serial_no
-        serial_no, (delta_tof, signal_level, *hydrophone_state), groundtruth = data
+        serial_no, (delta_tof, signal_level, *hydrophone_state), groundtruth, tof_distance = data
 
         # Update the appropriate kalman filter
         if serial_no in self._filters:
@@ -211,14 +218,15 @@ class ParticleFilter(Filter):
         kf.iterate()
 
         # Unpack the measurement data from the kalman filter and the cached hydrophone state data
-        (r, r_dot) = kf.get_state() # TODO: have a flag in particle filter 
+        (r, r_dot) = kf.get_state()
 
-        # measurement = np.array([r, r_dot])
-        # measurement_cov = kf.get_state_cov()
-
-        measurement = groundtruth
-        measurement_cov = np.array([[1,0],[0,1]])
-
+        if ESTIMATED_RANGE:
+            measurement = np.array([r, r_dot])
+            measurement_cov = kf.get_state_cov()
+        else: 
+            measurement = groundtruth
+            measurement_cov = np.array([[1,0],[0,1]])
+            
         x, y, theta, v = hydrophone_state
         vx = v * np.cos(theta)
         vy = v * np.sin(theta)
@@ -234,11 +242,24 @@ class ParticleFilter(Filter):
         r_pred = np.sqrt(np.square(x_diff) + np.square(y_diff))
         r_dot_pred = (x_diff * (vx - tag_vx) + y_diff * (vy - tag_vy)) / r_pred
 
-        # r_truth, r_dot_truth = measurement
-        r_pred, r_dot_pred = measurement
-        
+        if ESTIMATED_RANGE: 
+            r_pred, r_dot_pred = measurement
+
         # Compute weights
-        x = np.column_stack([r_pred, r_dot_pred])
+        x_weight = np.column_stack([r_pred, r_dot_pred])
+        # else: 
+        #     r_truth, r_dot_truth = measurement
+        #     x_weight = np.column_stack([r_truth, r_dot_truth])
+
+        measured_truth_range.append(groundtruth[0])
+        measured_truth_range_der.append(groundtruth[1])
+
+        estimated_range.append(measurement[0])
+        estimated_range_der.append(measurement[1])
+
+        tof_distances.append(tof_distance)
+
+        range_timestamps.append(timestamp)
 
         try:
             dist = multivariate_normal(measurement, measurement_cov)
@@ -246,11 +267,9 @@ class ParticleFilter(Filter):
             print(err)
             print(measurement_cov)
             dist = multivariate_normal(measurement, measurement_cov, allow_singular=True)
-        weight = dist.pdf(x)
+        weight = dist.pdf(x_weight)
         
         index = np.argmax(weight)
-        # print(r_pred[index],r_dot_pred[index], r_truth, r_dot_truth, weight[index])
-        # print(r_pred,r_dot_pred, r_truth, r_dot_truth, weight)
         print()
 
         # Resample if possible
@@ -304,6 +323,22 @@ if __name__ == '__main__':
     # })
 
     pf.run()
+
+    range = {}
+
+    df_range = pd.DataFrame(range)
+    df_range['datetime'] = range_timestamps
+    df['datetime'] = pd.to_datetime(df['datetime'])
+    df.index = df['datetime'] 
+
+    df_range['Groundtruth range'] = measured_truth_range
+    df_range['Groundtruth range derivative'] = measured_truth_range_der
+    df_range['Estimated range'] = estimated_range
+    df_range['Estimated range derivative'] = estimated_range_der
+    df_range['ToF Distance'] = tof_distances
+
+    df_range.notna()
+    df_range.to_csv('df_range.csv') 
 
     for serial_no, kf in pf._filters.items():
         groundtruth = df[df['serial_no'] == serial_no][['gps_distance', 'gps_speed']].to_numpy()
