@@ -8,7 +8,7 @@ from datetime import timedelta
 import utils
 import scipy
 from scipy.stats import multivariate_normal
-from plotting import plot_df, ESTIMATED_RANGE 
+from plotting import plot_df, ESTIMATED_RANGE
 from merge_dataset import merge_dataset
 import pandas as pd
 
@@ -21,6 +21,8 @@ estimated_range_der = []
 range_timestamps = []
 
 tof_distances = []
+
+serial_no_list = []
 
 class MotionModelBase(ABC):
     '''
@@ -206,14 +208,14 @@ class ParticleFilter(Filter):
     def _correction_step(self, timestamp, data, dt):
         super()._correction_step(timestamp, data, dt)
 
-        # serial_no
         serial_no, (delta_tof, signal_level, *hydrophone_state), groundtruth, tof_distance = data
-
+        
         # Update the appropriate kalman filter
         if serial_no in self._filters:
             kf = self._filters[serial_no]
         else:
             kf = self._filters[serial_no] = KalmanFilter(save_history=self._save_history, **self._hydrophone_params.get(serial_no, {}))
+                
         kf.queue_correction(timestamp, np.array([delta_tof, signal_level]))
         kf.iterate()
 
@@ -250,6 +252,8 @@ class ParticleFilter(Filter):
         # else: 
         #     r_truth, r_dot_truth = measurement
         #     x_weight = np.column_stack([r_truth, r_dot_truth])
+
+        serial_no_list.append(serial_no)
 
         measured_truth_range.append(groundtruth[0])
         measured_truth_range_der.append(groundtruth[1])
@@ -310,10 +314,10 @@ if __name__ == '__main__':
     #     457012: {'m': -0.20985953, 'l': 5.5568182, 'b': 76.90064068, 'signal_var': 9.400336}
     # })
 
-    df = merge_dataset('tag78_50m_increment_long_beach_test_0')
+    df = merge_dataset('tag78_50m_increment_long_beach_test_0_clipped')
     pf = ParticleFilter.from_dataset(df, 65478, 100, RandomMotionModel, save_history=True, hydrophone_params={
-        457049: {'m': -0.10527966, 'l': -0.55164737, 'b': 68.59493072, 'signal_var': 16.250003},
-        457012: {'m': -0.20985953, 'l': 5.5568182, 'b': 76.90064068, 'signal_var': 9.400336}
+        457049: {'m': -0.07785192, 'l': 0.2497, 'b': 76.50355414, 'signal_var': 7.544651},
+        457012: {'m': -0.058093639, 'l': -0.791950975, 'b': 76.4890277, 'signal_var': 13.522776}
     })
 
     # df = merge_dataset('tag78_shore_2_boat_all_static_test_1')
@@ -329,8 +333,9 @@ if __name__ == '__main__':
     df_range = pd.DataFrame(range)
     df_range['datetime'] = range_timestamps
     df['datetime'] = pd.to_datetime(df['datetime'])
-    df.index = df['datetime'] 
+    df.index = df['datetime']
 
+    df_range['Serial no'] = serial_no_list
     df_range['Groundtruth range'] = measured_truth_range
     df_range['Groundtruth range derivative'] = measured_truth_range_der
     df_range['Estimated range'] = estimated_range
@@ -340,7 +345,18 @@ if __name__ == '__main__':
     df_range.notna()
     df_range.to_csv('df_range.csv') 
 
+    df_range_457012 = df_range[df_range['Serial no'] == 457012] 
+    df_range_457012.notna()
+    print(df_range_457012)
+    df_range_457012.to_csv('df_range_457012.csv')
+
+    df_range_457049 = df_range[df_range['Serial no'] == 457049] 
+    df_range_457049.notna()
+    print(df_range_457049)
+    df_range_457049.to_csv('df_range_457049.csv')
+
     for serial_no, kf in pf._filters.items():
+        print("plotting now")
         groundtruth = df[df['serial_no'] == serial_no][['gps_distance', 'gps_speed']].to_numpy()
         kf.plot(groundtruth, str(serial_no), save=False, replace=replace)
     
@@ -361,7 +377,7 @@ if __name__ == '__main__':
 
     # save to csv 
     # df.to_csv('../data/06-08-2022/all_hydrophone.csv')
-
+    print("plotting df")
     plot_df(pf, df, bbox=bbox, square=True)
 
 # if __name__ == '__main__':

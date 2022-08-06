@@ -31,19 +31,23 @@ tag_id = 65478
 
 # Loop through the files found
 files = utils.imerge(
-    utils.find_files('../data/07-19-2022', name=r'tag78_shore_2_boat_all_static_test_.*', extension=r'\.csv'))
+    # utils.find_files('../data/07-19-2022', name=r'tag78_shore_2_boat_all_static_test_.*', extension=r'\.csv'))
     # utils.find_files('../data/07-18-2022', name=r'tag78_drift_test_.*', extension=r'\.csv'))
     # utils.find_files('../data/07-18-2022', name=r'tag78(?!_swimming)(?!_shore_2_boat_all_static_test_\w{5,6}_0).*VR100.*', extension=r'\.csv'))
     # utils.find_files('../data/07-18-2022', name=r'tag78(?!_swimming).*', extension=r'\.csv'))
     # utils.find_files('../data/06-29-2022', name=r'.*457012.*', extension=r'\.csv'))
+
+    utils.find_files('../data/06-08-2022', name= r'clip_tag78_50m_increment_long_beach_test_457049_0', extension=r'\.csv'))
+
     # utils.find_files('../data/06-08-2022', name=r'.*(?:increment|none).*457012_0'))
+
     # utils.find_files('../data/06-01-2022', name=r'.*457012.*'))
     # utils.find_files('../data/06-01-2022', name=r'.*manual.*'))
     # utils.find_files('../data/05-26-2022', name=r'tag78.*', extension=r'\.csv'),
     # utils.find_files('../data/06-01-2022', extension=r'\.csv'))
     # utils.find_files('../data/05-31-2022', '../data/05-27-2022', extension=r'\.csv'))
     # utils.find_files('../../icex-lair-2021', name=r'data_[\d]+', extension=r'\.csv'))
-save_to = '../plots/07-19-2022'
+save_to = '../plots/06-08-2022'
 
 def get_df_column(df, name):
     return np.array(df.get(name, [np.nan] * len(df)))
@@ -203,6 +207,11 @@ for columns in column_sets:
         ax0, ax1 = axd['left'], axd['right']
         ax0.plot(source_data['total_dt'], signals, label='Signal level')
         ax0.plot(source_data['total_dt'], predicted_signals, label='Predicted signal level. R^2={:.6f}, error={:.6f}\nx={}'.format(r_sqr, error, x))
+
+        # Plot the fitted line here
+        # ax0.plot(source_data['total_dt'], x[0]*source_data['total_dt'] + x[1], 'r', label='Fitted line')
+
+        
         ax0_twin = ax0.twinx()
         ax0_twin.plot(source_data['total_dt'], diff, color='#2ca02c', label='Error: mean={:.6f}, var={:.6f}'.format(np.mean(diff[~isnan]), np.var(diff[~isnan])))
         ax0.set_xlabel('Time (s)')

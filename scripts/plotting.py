@@ -14,6 +14,8 @@ import pandas as pd
 
 ESTIMATED_RANGE = True
 range_df = pd.read_csv('df_range.csv') 
+df_range_457012 = pd.read_csv('df_range_457012.csv')
+df_range_457049 = pd.read_csv('df_range_457049.csv')
 
 def plot_df(pf, df, save_to=None, plot_avg=True, msg = '', bbox=None, padding=1.1, show=True, square=False):
     fig = plt.figure()
@@ -145,27 +147,45 @@ def plot_df(pf, df, save_to=None, plot_avg=True, msg = '', bbox=None, padding=1.
             hydrophone.set_data([pos[0]], [pos[1]])
             idx = bisect.bisect(hydrophone_traj.df.index, curr_time) - 1 
 
-            # hydrophone_traj.df.index is DatetimeIndex
-            # curr_time is timestamps pandas
-
             time_range_array = (start_time <= hydrophone_traj.df.index) & (hydrophone_traj.df.index <=end_time)
             
             # if the datetime is within 8 seconds of the hydrophone reading
             if any(time_range_array): 
-                print("IDX", idx)
-                print("IDX", type(idx))
 
                 if ESTIMATED_RANGE == False: 
-                    # this is plotting the true range measurement
-                    r = range_df.iloc[idx]['Groundtruth range']
+                    if serial_no == 457012: 
+                        r = df_range_457012.iloc[idx]['Groundtruth range']
+                        print("groundtruth range", r)
+                        print("gps distance", hydrophone_traj.df.iloc[idx]['gps_distance'])
+                    
+                    elif serial_no == 457049: 
+                        r = df_range_457049.iloc[idx]['Groundtruth range']
+                        print("groundtruth range", r)
+                        print("gps distance", hydrophone_traj.df.iloc[idx]['gps_distance'])
+                    
+                    # print("gps distance", hydrophone_traj.df.iloc[idx]['gps_distance'])
+                    # r = range_df.iloc[idx]['Groundtruth range']
                     # r = hydrophone_traj.df.iloc[idx]['gps_distance']
                     hydrophone_circles[serial_no].set(center=pos, radius=r)
                 else: 
+                    print("estimated range, no groundtruth")
+                    if serial_no == 457012: 
+                        r = df_range_457012.iloc[idx]['Estimated range']
+                        print("estimated range", r)
+                        print("gps distance", hydrophone_traj.df.iloc[idx]['gps_distance'])
+                    
+                    elif serial_no == 457049: 
+                        r = df_range_457049.iloc[idx]['Estimated range']
+                        print("estimated range", r)
+                        print("gps distance", hydrophone_traj.df.iloc[idx]['gps_distance'])
+                    
                     # this is plotting the true range measurement
                     r = range_df.iloc[idx]['Estimated range']
+                    # r = hydrophone_traj.df.iloc[idx]['gps_distance']
                     hydrophone_circles[serial_no].set(center=pos, radius=r)
 
             else: 
+                print("no measurement")
                 r = 0
                 pos = np.array([0,0])
                 hydrophone_circles[serial_no].set(center=pos, radius=r)
