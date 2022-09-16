@@ -54,9 +54,7 @@ tag78_50m_increment_long_beach_test_457012_2:
     hydrophones:
         457012:
             path: '06-01-2022/tag78_50m_increment_long_beach_test_457012_2.csv'
-            log_paths: [
-                '../data\06-01-2022\20220601-155249-CH_Long_Beach_Mission_05_31_2022-IVER3-3013\Logs\20220601-155325--CH_Long_Beach_Mission_05_31_2022-IVER3-3013.log'
-            ]
+            log_path: '../data\06-01-2022\20220601-155249-CH_Long_Beach_Mission_05_31_2022-IVER3-3013\Logs\20220601-155325--CH_Long_Beach_Mission_05_31_2022-IVER3-3013.log'
     tag: 65478
     tag_coords:
         latitude: 33.7421588
@@ -71,9 +69,7 @@ tag78_50m_increment_long_beach_test_3:
     hydrophones:
         457012:
             path: '06-01-2022/tag78_50m_increment_long_beach_test_457012_3.csv'
-            log_paths: [
-                '../data/06-01-2022/20220601-164716-CH_Long_Beach_Mission_05_31_2022-IVER3-3013/Logs/20220601-164722--CH_Long_Beach_Mission_05_31_2022-IVER3-3013.log'
-            ]
+            log_path: '../data/06-01-2022/20220601-164716-CH_Long_Beach_Mission_05_31_2022-IVER3-3013/Logs/20220601-164722--CH_Long_Beach_Mission_05_31_2022-IVER3-3013.log'
     tag: 65478
     tag_coords:
         latitude: 33.7421588
@@ -90,7 +86,7 @@ tag78_50m_increment_long_beach_test_0:
             path: '06-08-2022/tag78_50m_increment_long_beach_test_457049_0.csv'
         457012:
             path: '06-08-2022/tag78_50m_increment_long_beach_test_457012_0.csv'
-            log_paths: [
+            log_path: [
                 '../data\06-08-2022\20220608-153927-CH_Long_Beach_Mission_0_06_07_2022-IVER3-3013\Logs\20220608-153932--CH_Long_Beach_Mission_0_06_07_2022-IVER3-3013.log',
                 '../data\06-08-2022\20220608-154731-CH_Long_Beach_Mission_0_06_07_2022-IVER3-3013\Logs\20220608-154736--CH_Long_Beach_Mission_0_06_07_2022-IVER3-3013.log'
             ]
@@ -110,9 +106,7 @@ tag78_cowling_none_long_beach_test:
             path: '06-08-2022/tag78_cowling_none_long_beach_test_457049_0.csv'
         457012:
             path: '06-08-2022/tag78_cowling_none_long_beach_test_457012_0.csv'
-            log_paths: [
-                '../data\06-08-2022\20220608-171235-CH_Long_Beach_Mission_1_06_07_2022-IVER3-3013\Logs\20220608-171318--CH_Long_Beach_Mission_1_06_07_2022-IVER3-3013.log'
-            ]
+            log_path: '../data\06-08-2022\20220608-171235-CH_Long_Beach_Mission_1_06_07_2022-IVER3-3013\Logs\20220608-171318--CH_Long_Beach_Mission_1_06_07_2022-IVER3-3013.log'
     tag: 65478
     tag_coords:
         latitude: 33.7421588
@@ -183,7 +177,7 @@ tag78_shore_2_boat_all_static_test_0:
         longitude: -85.79533716666667
 
 # Hopefully can be used with the Kalman and Particle filters
-tag_78_swimming_test_0:
+tag78_swimming_test_0:
     type: 'two_hydrophones'
     description:
         'Two hydrophones were each on different boats while the tag was moved around by a swimmer'
@@ -195,4 +189,22 @@ tag_78_swimming_test_0:
             path: '07-18-2022/tag78_swimming_test_VR100_0.csv'
     tag: 65478
     tag_coords:
-        path: '07-18-2022/santa_elena_swim.csv'
+        path: '07-18-2022/tag78_swimming_test_tag_coords_0.csv'
+
+tag78_swimming_test_1:
+    type: 'two_hydrophones'
+    description:
+        'Two hydrophones were each on different boats while the tag was moved around by a swimmer'
+    date: '07-21-2022'
+    hydrophones:
+        457049:
+            path: [
+                '07-21-2022/tag78_swimming_test_457049_1.csv',
+                '07-21-2022/tag78_swimming_test_457049_1 (1).csv',
+                '07-21-2022/tag78_swimming_test_457049_1 (2).csv'
+            ]
+        VR100:
+            path: '07-21-2022/tag78_swimming_test_VR100_1.csv'
+    tag: 65478
+    tag_coords:
+        path: '07-21-2022/tag78_swimming_test_tag_coords_1.csv'
