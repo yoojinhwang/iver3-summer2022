@@ -2,7 +2,7 @@ import os
 import numpy as np
 import re
 import itertools
-from functools import partial
+from functools import reduce, partial
 import mercantile as mt
 import contextily as ctx
 import requests
@@ -476,3 +476,11 @@ def bounds2img(west, south, east, north, zoom=None, map_dir=None, force_download
     else:
         print('Could not download or find any map tiles locally.')
         return np.array([[]]), (0, 0, 0, 0)
+
+def columns_exist(columns, df):
+    '''Check if each of the columns given is in the dataframe'''
+    return reduce(np.logical_and, map(lambda column: column in df.columns, columns))
+
+def get_column(name, df):
+    '''Return the dataframe's column of the given name or a list of NaNs if it doesn't exist'''
+    return np.array(df.get(name, [np.nan] * len(df)))
