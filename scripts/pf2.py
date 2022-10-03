@@ -24,6 +24,8 @@ tof_distances = []
 
 serial_no_list = []
 
+kalmanfilter = False
+
 class MotionModelBase(ABC):
     '''
     Provides motion model functions
@@ -196,10 +198,11 @@ class ParticleFilter(Filter):
     def _prediction_step(self, timestamp, data, dt):
         super()._prediction_step(timestamp, data, dt)
 
-        # Update Kalman filters
-        for _, kf in self._filters.items():
-            kf.queue_prediction(timestamp, data)
-            kf.iterate()
+        if kalmanfilter == True:
+            # Update Kalman filters
+            for _, kf in self._filters.items():
+                kf.queue_prediction(timestamp, data)
+                kf.iterate()
 
         # Update particles
         self._particles = self._motion_model.prediction_step(self._particles, dt)
@@ -211,47 +214,54 @@ class ParticleFilter(Filter):
         serial_no, (delta_tof, signal_level, *hydrophone_state), groundtruth, tof_distance = data
         
         # Update the appropriate kalman filter
-        if serial_no in self._filters:
-            kf = self._filters[serial_no]
+        if kalmanfilter == True: 
+            print("i am using a kalman filter")
+            if serial_no in self._filters:
+                kf = self._filters[serial_no]
+            else:
+                kf = self._filters[serial_no] = KalmanFilter(save_history=self._save_history, **self._hydrophone_params.get(serial_no, {}))
+                    
+            kf.queue_correction(timestamp, np.array([delta_tof, signal_level]))
+            kf.iterate()
+
+            # Unpack the measurement data from the kalman filter and the cached hydrophone state data
+            (r, r_dot) = kf.get_state()
+
+            if ESTIMATED_RANGE:
+                measurement = np.array([r, r_dot])
+                measurement_cov = kf.get_state_cov()
+            else: 
+                measurement = groundtruth
+                measurement_cov = np.array([[1,0],[0,1]])
+            
+            x, y, theta, v = hydrophone_state
+            vx = v * np.cos(theta)
+            vy = v * np.sin(theta)
+
+            # Unpack the particles
+            tag_x, tag_y, tag_theta, tag_v, tag_omega, old_weight = self._particles.T
+            tag_vx = tag_v * np.cos(tag_theta)
+            tag_vy = tag_v * np.sin(tag_theta)
+
+            # Compute predicted measurement given the state
+            x_diff = x - tag_x
+            y_diff = y - tag_y
+            r_pred = np.sqrt(np.square(x_diff) + np.square(y_diff))
+            r_dot_pred = (x_diff * (vx - tag_vx) + y_diff * (vy - tag_vy)) / r_pred
+
+            if ESTIMATED_RANGE: 
+                r_pred, r_dot_pred = measurement
+                # Compute weights
+                x_weight = np.column_stack([r_pred, r_dot_pred])
+            else: 
+                r_truth, r_dot_truth = measurement
+                x_weight = np.column_stack([r_truth, r_dot_truth])
+        
         else:
-            kf = self._filters[serial_no] = KalmanFilter(save_history=self._save_history, **self._hydrophone_params.get(serial_no, {}))
-                
-        kf.queue_correction(timestamp, np.array([delta_tof, signal_level]))
-        kf.iterate()
-
-        # Unpack the measurement data from the kalman filter and the cached hydrophone state data
-        (r, r_dot) = kf.get_state()
-
-        if ESTIMATED_RANGE:
-            measurement = np.array([r, r_dot])
-            measurement_cov = kf.get_state_cov()
-        else: 
+            print("i am not using the kalman filter")
             measurement = groundtruth
             measurement_cov = np.array([[1,0],[0,1]])
-            
-        x, y, theta, v = hydrophone_state
-        vx = v * np.cos(theta)
-        vy = v * np.sin(theta)
-
-        # Unpack the particles
-        tag_x, tag_y, tag_theta, tag_v, tag_omega, old_weight = self._particles.T
-        tag_vx = tag_v * np.cos(tag_theta)
-        tag_vy = tag_v * np.sin(tag_theta)
-
-        # Compute predicted measurement given the state
-        x_diff = x - tag_x
-        y_diff = y - tag_y
-        r_pred = np.sqrt(np.square(x_diff) + np.square(y_diff))
-        r_dot_pred = (x_diff * (vx - tag_vx) + y_diff * (vy - tag_vy)) / r_pred
-
-        if ESTIMATED_RANGE: 
-            r_pred, r_dot_pred = measurement
-
-        # Compute weights
-        x_weight = np.column_stack([r_pred, r_dot_pred])
-        # else: 
-        #     r_truth, r_dot_truth = measurement
-        #     x_weight = np.column_stack([r_truth, r_dot_truth])
+            x_weight = np.column_stack([measurement[0], measurement[1]])
 
         serial_no_list.append(serial_no)
 

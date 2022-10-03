@@ -255,7 +255,6 @@ if __name__ == '__main__':
     groundtruth_state = np.column_stack([data['gps_distance'], data['gps_speed']])
     kf = KalmanFilter.from_csv(data)
 
-
     # # VR100
     # kf._m = -0.10527966
     # kf._l = -0.55164737
