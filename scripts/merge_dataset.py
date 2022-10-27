@@ -3,11 +3,14 @@ import pandas as pd
 import os
 import utils
 import numpy as np
-from datetime import datetime, timedelta
-from functools import reduce, partial
+# from datetime import datetime, timedelta
+# from functools import reduce, partial
 import geopy.distance
 import utils
+from collections import namedtuple
+import matplotlib.pyplot as plt
 
+Dataset = namedtuple('Dataset', ['df', 'attrs'])
 
 def merge_dataset(dataset_name, datasets_path='../data/datasets.yaml'):
     # Where to find the data
@@ -23,7 +26,7 @@ def merge_dataset(dataset_name, datasets_path='../data/datasets.yaml'):
     for _, hydrophone_dict in dataset_obj['hydrophones'].items():
         print(hydrophone_dict['path'])
         if type(hydrophone_dict['path']) is list:
-            hydrophone_pds = hydrophone_pds + [pd.read_csv(get_path(path)) for path in hydrophone_dict['path']]
+            hydrophone_pds += [pd.read_csv(get_path(path)) for path in hydrophone_dict['path']]
         else:
             hydrophone_pds.append(pd.read_csv(get_path(hydrophone_dict['path'])))
     data = pd.concat(hydrophone_pds)
@@ -131,13 +134,51 @@ def merge_dataset(dataset_name, datasets_path='../data/datasets.yaml'):
                 dy = next_y - y
                 gps_heading[i] = utils.angle_between((1, 0), (dx, dy))
             data.loc[bool_indices, 'gps_heading'] = gps_heading
-
-    return data
+    return Dataset(data, dataset_obj)
 
 '''
 Explanation of columns in a merged dataset:
-
+    serial_no:
+    line_counter:
+    datetime:
+    code_space:
+    tag_id:
+    sensor_adc:
+    signal_level:
+    noise_level:
+    channel:
+    latitude:
+    longitude:
+    total_dt:
+    dt:
+    delta_tof:
+    delta_distance:
+    total_distance:
+    tag_latitude:
+    tag_longitude:
+    gps_distance:
+    x:
+    y:
+    tag_x:
+    tag_y:
+    relative_tag_bearing:
+    tag_bearing:
+    gps_speed:
+    gps_delta_tof:
+    gps_theta:
+    gps_vel:
 '''
+
+# def visualize_dataset(dataset):
+#     '''
+#     Plot the times at which:
+#     - we receive a detection for each hydrophone
+#     - we have gps coordinates for each hydrophone
+#     - we have gps coordinates for the tag
+#     '''
+#     fig, ax = plt.subplot()
+#     for serial_no in dataset.df['serial_no'].unique():
+
 
 if __name__ == '__main__':
     dataset_name = 'tag78_swimming_test_1'

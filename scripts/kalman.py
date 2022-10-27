@@ -17,6 +17,9 @@ class KalmanFilter(Filter):
         times = np.array(data['total_dt'])
         delta_tof = np.array(data['delta_tof'])
         signal_level = utils.iir_filter(np.array(data['signal_level']), ff=1)
+        global serial_no 
+        serial_no = data['serial_no'][0]
+        print(serial_no)
 
         kf = KalmanFilter(save_history=True)
 
@@ -32,29 +35,33 @@ class KalmanFilter(Filter):
 
         return kf
 
-    def __init__(self, save_history=False):
+    def __init__(self, save_history=False, **kwargs):
         self._save_history = save_history
         super().__init__()
 
         self._speed_of_sound = 1460  # speed of sound in water (m/s)
 
-        self._l = -1.36582584
-        self._m = -0.064755099  # conversion between distance (m) and signal intensity (dB)
-        self._b = 77.7946280  # intercept for conversion between distance and signal intensity
+        self._m = kwargs.get('m', -0.064755099)  # conversion between distance (m) and signal intensity (dB)
+        self._l = kwargs.get('l', -1.36582584)  # conversion between speed (m/s) and signal intensity (dB)
+        self._b = kwargs.get('b', 77.7946280)  # intercept for conversion between distance and signal intensity
 
-        self._delta_tof_var = 0.0005444242032405411**2  # variance in the tag's time of flight when stationary (s)
+        self._delta_tof_var = kwargs.get('delta_tof_var', 0.0005444242032405411**2)  # variance in the tag's time of flight when stationary (s)
+
         # self._delta_tof_var = 1e-6
         # self._signal_var = 5.513502243014629**2  # variance in the signal intensity not explained by distance
-        self._signal_var = 15.297
+        # self._signal_var = kwargs.get('signal_var', 15.297)
+        self._signal_var = kwargs.get('signal_var', 25)
+        # self._signal_var = kwargs.get('signal_var', 100)
 
-        self._distance_var = 1e-3
+        self._distance_var = kwargs.get('distance_var', 1e-3)
         # self._velocity_var = 0.0604
-        self._velocity_var = 1
+        self._velocity_var = kwargs.get('velocity_var', 1)
 
     def reset(self):
         super().reset()
         self._state_mean = np.array([0, 0])  # r (m), dr/dt (m/s)
         self._state_cov = np.array([[1e4, 0], [0, 1e4]])  # covariance matrix for the state
+
         self._history = np.zeros((0,) + self._state_mean.shape)
         self._cov_history = np.zeros((0,) + self._state_cov.shape)
         self._step_history = np.zeros((0,), dtype=np.int32)
@@ -109,6 +116,7 @@ class KalmanFilter(Filter):
     def get_state_cov(self):
         return self._state_cov
 
+
     def plot(self, groundtruth_state=None, datapath=None, show=True, save=True, replace=False):
         if groundtruth_state is None:
             groundtruth_distance = None
@@ -125,7 +133,23 @@ class KalmanFilter(Filter):
         delta_tof = self._measurement_history[:, 0]
         signal_level = self._measurement_history[:, 1]
         filtered_distance = self._history[:, 0]
+
+        # tof distance subtract the previously fitted line to it to calibrate
+        # m = 0.007004
+        # b = -42.240582 
+
         tof_distance = np.cumsum(delta_tof * self._speed_of_sound)
+        print("before calibration")
+
+        if datapath == '457012':
+            print("calibration for 457012")
+            tof_distance = tof_distance + 300.008905278
+            # tof_distance = tof_distance - (0.007004*correction_times -42.240582)
+
+        elif datapath == '457049':
+            tof_distance = tof_distance - 852.19219604
+        print("after calibration", tof_distance)
+        
         signal_distance = np.array((signal_level - self._b - self._l * groundtruth_speed) / self._m)
         smoothed_signal_distance = utils.iir_filter(signal_distance, ff=0.3)
 
@@ -163,6 +187,15 @@ class KalmanFilter(Filter):
             filtered_error = filtered_distance[~is_prediction] - groundtruth_distance
             total_filtered_error = np.sqrt(np.sum(np.square(filtered_error[~np.isnan(filtered_error)])))
             tof_error = tof_distance - groundtruth_distance
+            print("toferror", tof_error)
+
+            # print("start", tof_error)
+            # print("first non nan value", tof_error[np.isfinite(tof_error)][0])
+            # print("last non nan value", tof_error[np.isfinite(tof_error)][-1])
+
+            # absolute tof error 
+            # tof_error = tof_error + np.abs(tof_error[np.isfinite(tof_error)][0] - tof_error[np.isfinite(tof_error)][-1])
+
             total_tof_error = np.sqrt(np.sum(np.square(tof_error[~np.isnan(tof_error)])))
             signal_error = signal_distance - groundtruth_distance
             total_signal_error = np.sqrt(np.sum(np.square(signal_error[~np.isnan(signal_error)])))
@@ -172,13 +205,23 @@ class KalmanFilter(Filter):
             ax2.plot(correction_times, tof_error, marker='.', label='TOF error: {:.6f}'.format(total_tof_error))
             ax2.plot(correction_times, signal_error, marker='.', label='Signal error: {:.6f}'.format(total_signal_error))
             # ax2.plot(self._times, smoothed_signal_error, marker='.', label='Smoothed signal error: {:.6f}'.format(total_smoothed_signal_error))
+
+            isnan = np.logical_or(np.isnan(tof_error), np.isnan(correction_times))
+            tof_error_subset = np.array(tof_error)[~isnan]
+            correction_times_subset = np.array(correction_times)[~isnan]
+
+            m, b = utils.fit_line(correction_times_subset, tof_error_subset)
+            r_sqr = np.corrcoef(correction_times_subset, tof_error_subset)[0][1] ** 2
+            ax2.plot(correction_times_subset, m*correction_times_subset + b, label='m={:.6f}, b={:.6f}, R^2={:.6f}'.format(m, b, r_sqr))
+
             ax2.set_xlabel('Time (s)')
             ax2.set_ylabel('Distance error (m)')
             ax2.set_title('Error')
             ax2.legend()
 
         # Add a title
-        fig.suptitle(os.path.split(datapath)[1])
+        if datapath is not None:
+            fig.suptitle(os.path.split(datapath)[1])
 
         # Show plot
         if show:
@@ -203,24 +246,43 @@ class KalmanFilter(Filter):
         self._total_signal_error = total_signal_error
 
 if __name__ == '__main__':
-    datapath = '../data/07-18-2022/tag78_drift_test_VR100_0.csv'
+    # datapath = '../data/07-18-2022/tag78_drift_test_VR100_0.csv'
+
+    # datapath = '../data/06-08-2022/tag78_50m_increment_long_beach_test_457012_0.csv'
+    datapath = '../data/06-08-2022/tag78_50m_increment_long_beach_test_457049_0.csv'
     data = pd.read_csv(datapath)
     data = data[data['tag_id'] == 65478].reset_index(drop=True)
     data['datetime'] = pd.to_datetime(data['datetime'])
     groundtruth_state = np.column_stack([data['gps_distance'], data['gps_speed']])
     kf = KalmanFilter.from_csv(data)
 
-    # VR100
-    kf._m = -0.10527966
-    kf._l = -0.55164737
-    kf._b = 68.59493072
-    kf._signal_var = 16.250003
+
+    # # VR100
+    # kf._m = -0.10527966
+    # kf._l = -0.55164737
+    # kf._b = 68.59493072
+    # kf._signal_var = 16.250003
 
     # 457049
+    # # Found this from tag78_drift_test_457049_0_model_distance_gps_speed.png
     # kf._m = -0.20985953
     # kf._l = 5.5568182
     # kf._b = 76.90064068
     # kf._signal_var = 9.400336
+
+    # 457012
+    # Found this from clip_tag78_50m_increment_long_beach_test_457012
+    kf._m = -0.0580963639
+    kf._l = -0.791950975
+    kf._b = 76.890277
+    kf._signal_var = 13.522776
+
+    # # TODO: 4570
+    # # Found this from clip_tag78_50m_increment_long_beach_test_4570
+    # kf._m = -0.0580963639
+    # kf._l = -0.791950975
+    # kf._b = 76.890277
+    # kf._signal_var = 13.522776
     
     kf.run()
     kf.plot(groundtruth_state=groundtruth_state, datapath=datapath, save=False)

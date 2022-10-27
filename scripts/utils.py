@@ -9,6 +9,7 @@ import requests
 import io
 from PIL import Image
 import uuid
+import geopy.distance
 
 EARTH_RADIUS = 6371009  # Radius of the earth in meters
 USER_AGENT = "contextily-" + uuid.uuid4().hex
@@ -147,7 +148,8 @@ def get_delta_tof(timestamps, avg_dt):
     '''Compute delta time of flights from a series of timestamps and an average dt'''
     total_dt = [dt.total_seconds() for dt in (timestamps - timestamps[0])]
     dt = np.diff(total_dt)
-    return (dt - avg_dt / 2) % avg_dt - avg_dt / 2
+    a = 1 / 2
+    return (dt - a * avg_dt) % avg_dt - (1 - a) * avg_dt
 
 def iir_filter(x, ff=1):
     # First-order IIR filter (infinite impulse response)
@@ -232,6 +234,18 @@ def to_coords(point, ref):
     latitude = point[1] / EARTH_RADIUS + ref[0]
     longitude = point[0] / (EARTH_RADIUS * np.cos(ref[0])) + ref[1]
     return np.degrees([latitude, longitude]).T
+
+def get_geodesic_distance(coords0, coords1):
+    '''
+    Use geopy.distance.geodesic to get the distance between coords0 and coords1
+    Supports numpy broadcasting
+    '''
+    f = lambda lat1, lon1, lat2, lon2: geopy.distance.geodesic((lat1, lon1), (lat2, lon2)).m
+    return np.frompyfunc(f, 4, 1)(coords0[0], coords0[1], coords1[0], coords1[1])
+
+def total_seconds(t1, t0):
+    _total_seconds = np.frompyfunc(lambda t1, t0: (t1-t0).total_seconds(), 2, 1)
+    return _total_seconds(np.array(t1, dtype=object), np.array(t0, dtype=object))
 
 # def angle_between(ref, vec):
 #     '''

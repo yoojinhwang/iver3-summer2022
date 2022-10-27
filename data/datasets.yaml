@@ -214,6 +214,9 @@ tag78_swimming_test_0:
     tag_id: 65478
     tag_coords:
         path: '07-18-2022/tag78_swimming_test_tag_coords_0.csv'
+    origin:
+        latitude: 10.922271274030209
+        longitude: -85.79158178530633
 
 # Longest span without gaps greater than:
 #    1 minute: 2022-07-21 09:44:38 to 2022-07-21 09:51:11
@@ -238,3 +241,34 @@ tag78_swimming_test_1:
     origin:
         latitude: 10.9262055
         longitude: -85.7966545
+
+tag78_swimming_test_1_1:
+    from: tag78_swimming_test_1
+    start_time: '2022-07-21 09:44'
+    end_time: '2022-07-21 09:52'
+    reset_tof: False
+
+tag78_swimming_test_1_2:
+    from: tag78_swimming_test_1_1
+    start_time: '2022-07-21 09:45:20'
+    end_time: '2022-07-21 09:51:15'
+    reset_tof: False
+
+new_sensor_test:
+    type: 'single_hydrophone'
+    description:
+        'Two tags were placed in buoys while the hydrophone was hung out of the side of the boat listening for them'
+    date: '09-23-2022'
+    hydrophones:
+        457049:
+            path: [
+                '09-23-2022/long_beach.csv',
+                '09-23-2022/long_beach (1).csv'
+            ]
+    tag_id: 2687  # The other tag had id 3315
+    tag_coords:
+        latitude: 33.7443502
+        longitude: -118.1303359
+    origin:
+        latitude: 33.7443502
+        longitude: -118.1303359
