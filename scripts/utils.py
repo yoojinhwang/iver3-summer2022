@@ -241,11 +241,19 @@ def get_geodesic_distance(coords0, coords1):
     Supports numpy broadcasting
     '''
     f = lambda lat1, lon1, lat2, lon2: geopy.distance.geodesic((lat1, lon1), (lat2, lon2)).m
-    return np.frompyfunc(f, 4, 1)(coords0[0], coords0[1], coords1[0], coords1[1])
+    out = np.frompyfunc(f, 4, 1)(coords0[0], coords0[1], coords1[0], coords1[1], dtype=np.float64)
+    if type(out) is float:
+        return out
+    else:
+        return out.astype(float)
 
 def total_seconds(t1, t0):
     _total_seconds = np.frompyfunc(lambda t1, t0: (t1-t0).total_seconds(), 2, 1)
-    return _total_seconds(np.array(t1, dtype=object), np.array(t0, dtype=object))
+    out = _total_seconds(np.array(t1, dtype=object), np.array(t0, dtype=object), dtype=np.float64)
+    if type(out) is float:
+        return out
+    else:
+        return out.astype(float)
 
 # def angle_between(ref, vec):
 #     '''

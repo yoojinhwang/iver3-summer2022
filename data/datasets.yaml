@@ -252,7 +252,9 @@ tag78_swimming_test_1_2:
     from: tag78_swimming_test_1_1
     start_time: '2022-07-21 09:45:20'
     end_time: '2022-07-21 09:51:15'
-    reset_tof: False
+    # start_time: '2022-07-21 09:44'
+    # end_time: '2022-07-21 09:52'
+    # reset_tof: True
 
 new_sensor_test:
     type: 'single_hydrophone'

@@ -68,7 +68,7 @@ class Dataset():
             df.sort_index(inplace=True)  # Sort by datetime
 
             # Get just the detections
-            detections = df[df['tag_id'] == tag_id][[
+            columns = [
                 'serial_no',            # The hydrophone's serial number
                 'code_space',           #
                 'tag_id',               # The id of the tag detected
@@ -79,7 +79,8 @@ class Dataset():
                 'delta_tof',            # The change in time of flight since the last detection
                 'delta_distance',       # The change in distance since the last detection
                 'total_distance'        # The total change in distance since the first detection
-            ]]
+            ]
+            detections = df[df['tag_id'] == tag_id][[column for column in columns if column in df.columns]]
 
             # Filter out rows that don't have valid gps coordinates
             idxs = []
@@ -128,17 +129,31 @@ class Dataset():
                 coords = coords[:end_time]
         else:
             # Find the start time and end time for the whole data frame
-            for data in self.hydrophones.values():
-                if start_time is None or start_time > data.raw.index[0]:
-                    start_time = data.raw.index[0]
-                if end_time is None or end_time < data.raw.index[-1]:
-                    end_time = data.raw.index[-1]
+            if start_time is None:
+                for data in self.hydrophones.values():
+                    if start_time is None or start_time > data.raw.index[0]:
+                        start_time = data.raw.index[0]
+            if end_time is None:
+                for data in self.hydrophones.values():
+                    if end_time is None or end_time < data.raw.index[-1]:
+                        end_time = data.raw.index[-1]
+
             raw = np.array([tag_coords_dict['latitude'], tag_coords_dict['longitude']])
             coords = pd.DataFrame(
                 [[raw[0], raw[1]]]*2,
                 columns=['latitude', 'longitude'],
                 index=[start_time, end_time])
         coords['x'], coords['y'] = utils.to_cartesian(np.array(coords).T, self.origin).T
+
+        # Find the start time and end time for the whole data frame
+        if start_time is None:
+            for data in self.hydrophones.values():
+                if start_time is None or start_time > data.raw.index[0]:
+                    start_time = data.raw.index[0]
+        if end_time is None:
+            for data in self.hydrophones.values():
+                if end_time is None or end_time < data.raw.index[-1]:
+                    end_time = data.raw.index[-1]
 
         # Fill in tag data
         self.tag = TagData(raw, tag_id, utils.avg_dt_dict.get(tag_id, np.nan), coords)
@@ -235,8 +250,26 @@ class Dataset():
                 lats.append(row.latitude)
                 lons.append(row.longitude)
             return np.array([lats, lons])
+        elif rows is None:
+            return None
         else:
             return np.array([rows.latitude, rows.longitude])
+
+    def get_tag_xy(self, timestamp, mode='interpolate', ordered=True):
+        '''
+        Get the tag's coordinates at timestamp(s)
+        '''
+        rows = Dataset.get(self.tag.coords, timestamp, mode=mode, ordered=ordered)[1]
+        if type(rows) == list:
+            x, y = [], []
+            for row in rows:
+                x.append(row.x)
+                y.append(row.y)
+            return np.array([x, y]).T
+        elif rows is None:
+            return None
+        else:
+            return np.array([rows.x, rows.y])
     
     def get_hydrophone_coords(self, name, timestamp, mode='interpolate', ordered=True):
         '''
@@ -249,8 +282,26 @@ class Dataset():
                 lats.append(row.latitude)
                 lons.append(row.longitude)
             return np.array([lats, lons])
+        elif rows is None:
+            return None
         else:
             return np.array([rows.latitude, rows.longitude])
+    
+    def get_hydrophone_xy(self, name, timestamp, mode='interpolate', ordered=True):
+        '''
+        Get the given hydrophone's coordinates at timestamp(s)
+        '''
+        rows = Dataset.get(self.hydrophones[name].coords, timestamp, mode=mode, ordered=ordered)[1]
+        if type(rows) == list:
+            x, y = [], []
+            for row in rows:
+                x.append(row.x)
+                y.append(row.y)
+            return np.array([x, y]).T
+        elif rows is None:
+            return None
+        else:
+            return np.array([rows.x, rows.y])
     
     def get_gps_distance(self, name, timestamp, mode='interpolate', ordered=True):
         '''
@@ -274,10 +325,53 @@ class Dataset():
         else:
             speeds = [np.nan]
             for (prev_t, prev_distance), (t, distance) in utils.pairwise(zip(timestamp, distances)):
-                speeds.append((distance - prev_distance) / (t - prev_t).total_seconds())
+                dt = (t - prev_t).total_seconds()
+                delta_distance = distance - prev_distance
+
+                # Handle duplicate timestamps
+                if dt == 0 and delta_distance == 0:
+                    speeds.append(speeds[-1])
+                elif dt == 0:
+                    speeds.append(np.sign(delta_distance) * np.inf)
+                else:
+                    speeds.append(delta_distance / dt)
             return np.array(speeds)
 
-    def plot(self, save=True, replace=True, show=True):
+    def get_gps_vel(self, name, timestamp, mode='interpolate', ordered=True):
+        '''
+        Get the velocity at which the hydrophone is traveling as measured by the GPS at timestamp(s)
+        '''
+        hydrophone_coords = self.get_hydrophone_coords(name, timestamp, mode=mode, ordered=ordered)
+        if len(hydrophone_coords.shape) == 1:
+            return np.nan
+        else:
+            distances = utils.get_geodesic_distance(hydrophone_coords[:, 1:], hydrophone_coords[:, :-1])
+            dts = utils.total_seconds(timestamp[1:], timestamp[:-1])
+            vels = [np.nan]
+            for distance, dt in zip(distances, dts):
+                # Handle duplicate timestamps
+                if dt == 0 and distance == 0:
+                    vels.append(vels[-1])
+                elif dt == 0:
+                    vels.append(np.inf)
+                else:
+                    vels.append(distance / dt)
+            return np.array(vels)
+
+    def get_gps_theta(self, name, timestamp, mode='interpolate', ordered=True):
+        '''
+        Get the angle off the horizontal at which the hydrophone is traveling as measured by the GPS at timestamp(s)
+        '''
+        hydrophone_coords = self.get_hydrophone_xy(name, timestamp, mode=mode, ordered=ordered)
+        if len(hydrophone_coords.shape) == 1:
+            return np.nan
+        else:
+            x, y = hydrophone_coords.T
+            vecs = np.array([np.diff(x), np.diff(y)]).T
+            thetas = utils.angle_between(utils.unit_2d(0), vecs)
+            return np.concatenate([[np.nan], thetas])
+
+    def plot(self, save=False, replace=True, show=True):
         def ints():
             i = 0
             while True:
@@ -333,7 +427,7 @@ class Dataset():
         if show:
             plt.show()
         if save:
-            savepath = utils.add_version('../datasets/{n}/{n}_summary'.format(n=self.name))
+            savepath = utils.add_version('../datasets/{n}/{n}_summary.png'.format(n=self.name))
             print('Saving to {}'.format(savepath))
             utils.savefig(fig, savepath, replace=replace)
         plt.close()
@@ -380,9 +474,10 @@ class Dataset():
 
                 # Axis 1
                 # Plot errors
-                tof_distance_rms = np.sqrt(np.sum(np.square(gps_distances - tof_distances)))
-                shifted_tof_distance_rms = np.sqrt(np.sum(np.square(gps_distances - shifted_tof_distances)))
-                adjusted_tof_distance_rms = np.sqrt(np.sum(np.square(gps_distances - adjusted_tof_distances)))
+                n = len(times)
+                tof_distance_rms = np.sqrt(np.sum(np.square(gps_distances - tof_distances)) / n)
+                shifted_tof_distance_rms = np.sqrt(np.sum(np.square(gps_distances - shifted_tof_distances)) / n)
+                adjusted_tof_distance_rms = np.sqrt(np.sum(np.square(gps_distances - adjusted_tof_distances)) / n)
                 axs[1].plot(times, [0]*len(times), **kwargs)
                 axs[1].plot(times, gps_distances - tof_distances, label=f('tof error, RMS={:.2f}'.format(tof_distance_rms)), **kwargs)
                 axs[1].plot(times, gps_distances - shifted_tof_distances, label=f('shifted tof error, RMS={:.2f}'.format(shifted_tof_distance_rms)), **kwargs)
@@ -437,7 +532,7 @@ class Dataset():
         if show:
             plt.show()
         if save:
-            savepath = utils.add_version('../datasets/{n}/{n}_tof_vs_gps'.format(n=self.name))
+            savepath = utils.add_version('../datasets/{n}/{n}_tof_vs_gps.png'.format(n=self.name), replace=replace)
             print('Saving to {}'.format(savepath))
-            utils.savefig(fig, savepath, replace=replace)
+            utils.savefig(fig, savepath)
         plt.close()

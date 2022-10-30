@@ -1,30 +1,36 @@
 from abc import ABC, abstractmethod
-import numpy as np
-import utils
 from filter import Filter
-from scipy.stats import multivariate_normal
+from kalman import KalmanFilter
+import numpy as np
+# import pandas as pd
+from datetime import timedelta
+import utils
 import scipy
+from scipy.stats import multivariate_normal
+from merge_dataset import merge_dataset
+# from plotting import plot_df
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
-import pandas as pd
-from dataset import Dataset
-from kalman import KalmanFilter
-from datetime import timedelta
+import movingpandas as mpd
+import bisect
 
 class MotionModelBase(ABC):
     '''
     Provides motion model functions
     '''
     def __init__(self, size, name, **kwargs):
-        self.size = size
+        self._size = size
         self.name = name
         self.info = {'kwargs': kwargs}
-
+    
+    def particle_size(self):
+        return self._size
+    
     @abstractmethod
     def initialize_particles(self, num_particles, **kwargs):
         uniform_random = kwargs.get('uniform_random', None)
-        particles = np.zeros((num_particles, self.size))
+        particles = np.zeros((num_particles, self._size))
 
         # Initialize weights to 1
         particles[:, -1] = 1
@@ -40,6 +46,7 @@ class MotionModelBase(ABC):
         '''
         Given the list of particles from the previous time step, update them to the next time step
         '''
+        pass
 
 class RandomMotionModel(MotionModelBase):
     def __init__(self, **kwargs):
@@ -47,9 +54,9 @@ class RandomMotionModel(MotionModelBase):
         kwargs['name'] = 'random'
         super().__init__(6, **kwargs)
         self._x_mean = kwargs.get('x_mean', 0)
-        self._x_stdev = kwargs.get('x_stdev', 1)
+        self._x_stdev = kwargs.get('x_stdev', 1e-1)
         self._y_mean = kwargs.get('y_mean', 0)
-        self._y_stdev = kwargs.get('y_stdev', 1)
+        self._y_stdev = kwargs.get('y_stdev', 1e-1)
     
     def initialize_particles(self, num_particles, **kwargs):
         return super().initialize_particles(num_particles, **kwargs)
@@ -72,14 +79,47 @@ class RandomMotionModel(MotionModelBase):
         return np.column_stack([x_f, y_f, theta_f, v_f, omega_f, weight])
 
 class ParticleFilter(Filter):
-    def __init__(self, num_particles, motion_model_type, motion_model_params={}, save_history=False):
+    def from_dataset(dataset, num_particles, motion_model_type, motion_model_params={}, save_history=False, hydrophone_params={}):
+        # Remove rows that are not about the tag we are localizing
+        df = dataset.df[dataset.df['tag_id'] == dataset.attrs['tag_id']]
+
+        # Assumes the data is sorted by datetime, which should be a valid assumption if it comes from merge_dataset
+        start_time = df.iloc[0]['datetime']
+        end_time = df.iloc[-1]['datetime']
+        num_predictions = int((end_time - start_time).total_seconds()) + 2
+
+        pf = ParticleFilter(num_particles, motion_model_type, motion_model_params, save_history, hydrophone_params)
+
+        # Queue predictions
+        print(num_predictions)
+        for i in range(num_predictions):
+            timestamp = start_time + timedelta(seconds=i)
+            pf.queue_prediction(timestamp, np.array([]))
+        
+        # Queue measurements
+        for _, row in df.iterrows():
+            timestamp = row['datetime']
+            data = (
+                row['serial_no'],
+                np.array([
+                    row['delta_tof'],
+                    row['signal_level'],
+                    row['x'],
+                    row['y'],
+                    row['gps_theta'],
+                    row['gps_vel']]))
+            pf.queue_correction(timestamp, data)
+        return pf
+
+    def __init__(self, num_particles, motion_model_type, motion_model_params={}, save_history=False, hydrophone_params={}):
         self._save_history = save_history
         self._num_particles = num_particles
         self._motion_model_params = motion_model_params
         self._motion_model = motion_model_type(**motion_model_params)
+        self._hydrophone_params = hydrophone_params
         self._last_step_type = None
         super().__init__()
-    
+
         def on_prediction(*_):
             if self._last_step_type == Filter.CORRECTION:
                 self._resample_step()
@@ -87,7 +127,7 @@ class ParticleFilter(Filter):
         
         def on_correction(*_):
             self._last_step_type = Filter.CORRECTION
-        
+
         self.on_prediction(on_prediction)
         self.on_correction(on_correction)
     
@@ -98,21 +138,26 @@ class ParticleFilter(Filter):
         self._history = np.zeros((0,) + self._particles.shape)
         self._step_history = np.zeros((0,), dtype=np.int32)
         self._time_history = np.zeros((0,), dtype=object)
-        self._hydrophone_history = np.zeros((0,), dtype=object)
-        self._measurement_history = np.zeros((0, 6))
-    
-    def _update_history(self, timestamp, step_type, serial_no=None, measurement=None):
+        self._measurement_history = np.zeros((0, 2))
+        self._hydrophone_state_history = np.zeros((0, 5), dtype=object)
+
+    def _update_history(self, timestamp, step_type, measurement=None, hydrophone_state=None):
         if self._save_history:
             self._history = np.concatenate([self._history, [self._particles]])
             self._step_history = np.concatenate([self._step_history, [step_type]])
             self._time_history = np.concatenate([self._time_history, [timestamp]])
             if step_type == Filter.CORRECTION:
-                self._hydrophone_history = np.concatenate([self._hydrophone_history, [serial_no]])
                 self._measurement_history = np.concatenate([self._measurement_history, [measurement]])
-    
+                self._hydrophone_state_history = np.concatenate([self._hydrophone_state_history, [hydrophone_state]])
+
     def _prediction_step(self, timestamp, data, dt):
         super()._prediction_step(timestamp, data, dt)
 
+        # Update Kalman filters
+        for _, kf in self._filters.items():
+            kf.queue_prediction(timestamp, data)
+            kf.iterate()
+        
         # Update particles
         self._particles = self._motion_model.prediction_step(self._particles, dt)
         self._update_history(timestamp, Filter.PREDICTION)
@@ -120,9 +165,24 @@ class ParticleFilter(Filter):
     def _correction_step(self, timestamp, data, dt):
         super()._correction_step(timestamp, data, dt)
 
-        # Unpack the measurement data
-        serial_no, (r, r_dot, *hydrophone_state), measurement_cov = data
+        # Delta tof and signal level comprise the measurement for the kalman filter
+        # The hydrophone state combined with the output of the kalman filter comprise the measurement for the particle filter
+        serial_no, (delta_tof, signal_level, *hydrophone_state) = data
+
+        # Update the appropriate kalman filter
+        if serial_no in self._filters:
+            kf = self._filters[serial_no]
+        else:
+            kf = self._filters[serial_no] = KalmanFilter(
+                save_history=self._save_history,
+                **self._hydrophone_params.get(serial_no, {}))
+        kf.queue_correction(timestamp, np.array([delta_tof, signal_level]))
+        kf.iterate()
+
+        # Unpack the measurement data from the kalman filter and the cached hydrophone state data
+        (r, r_dot) = kf.get_state()
         measurement = np.array([r, r_dot])
+        measurement_cov = kf.get_state_cov()
         x, y, theta, v = hydrophone_state
         vx = v * np.cos(theta)
         vy = v * np.sin(theta)
@@ -147,12 +207,13 @@ class ParticleFilter(Filter):
         weight = dist.pdf(x)
         self._particles[:, -1] *= weight
 
-        print('Correction step', timestamp)
-        self._update_history(timestamp, Filter.CORRECTION, serial_no, np.array([r, r_dot, *hydrophone_state]))
+        print('Correction step', timestamp, serial_no)
+        self._update_history(timestamp, Filter.CORRECTION, measurement, np.array([serial_no, *hydrophone_state], dtype=object))
     
     def _resample_step(self):
         # Resample if possible
         weight = self._particles[:, -1]
+        self._particles[:, -1] = 1
         if np.sum(np.isnan(weight)) == 0:
             min_weight = 1e-60
             weight = np.maximum(weight, min_weight)
@@ -160,20 +221,10 @@ class ParticleFilter(Filter):
             probs = weight / w_tot  # normalize weights
             indices = np.random.choice(len(self._particles), len(self._particles), p=probs)
             self._particles = self._particles[indices]
+            # print('Resampled particles')
         else:
-            print('Skipped measurement(s) due to nan weights')
-        self._particles[:, -1] = 1
-
-    # def plot(self, dataset):
-    #     fig, ax = plt.subplots()
-    #     tag_x, tag_y = np.array(dataset.tag.coords[['x', 'y']]).T
-    #     avg_particle = np.average(self._history, axis=1)
-    #     avg_x, avg_y = avg_particle[:, 0], avg_particle[:, 1]
-    #     ax.plot(tag_x, tag_y, marker='.', label='tag trajectory')
-    #     ax.plot(avg_x, avg_y, marker='.', label='pf estimate')
-    #     ax.legend()
-    #     plt.show()
-
+            print('Skipped measurement due to nan weights')
+    
     def plot(self, dataset, padding=1.1, square=True):
         # Make sure we have the data to plot
         if not self._save_history:
@@ -187,13 +238,13 @@ class ParticleFilter(Filter):
         # Find a bounding box that always shows the average particle, the hydrophones, and the tag
         all_x = np.concatenate([
             avg_particle[:, 0].flatten(),
-            dataset.tag.coords['x'].to_numpy(),
-            self._measurement_history[:, 2].astype(np.float64)
+            dataset.df['tag_x'].to_numpy(),
+            self._hydrophone_state_history[:, 1].astype(np.float64)
         ])  # Concatenate all relevant x coordinates
         all_y = np.concatenate([
             avg_particle[:, 1].flatten(),
-            dataset.tag.coords['y'].to_numpy(),
-            self._measurement_history[:, 3].astype(np.float64)
+            dataset.df['tag_y'].to_numpy(),
+            self._hydrophone_state_history[:, 2].astype(np.float64)
         ])  # Concatenate all relevant y coordinates
         all_x = all_x[~np.isnan(all_x)]
         all_y = all_y[~np.isnan(all_y)]
@@ -216,7 +267,7 @@ class ParticleFilter(Filter):
 
         # Create artists
         # Create background map
-        origin = dataset.origin
+        origin = (dataset.attrs['origin']['latitude'], dataset.attrs['origin']['longitude'])
         cartesian_bounds = np.array(bbox).reshape(2, 2).T
         cartesian_bounds = utils.pad_bounds(cartesian_bounds.T, f=2).T
         if origin is not None:
@@ -229,13 +280,18 @@ class ParticleFilter(Filter):
         # Plot the hydrophones' locations and detections
         hydrophones = {}
         hydrophone_circles = {}
-        hydrophone_r_series = {}
-        for serial_no in dataset.hydrophones:
+        hydrophone_trajs = {}
+        for serial_no in dataset.df['serial_no'].unique():
+            hydrophone_trajs[serial_no] = mpd.Trajectory(
+                dataset.df[
+                    dataset.df['serial_no'] == serial_no
+                ].set_index('datetime'),
+                '{}_traj'.format(serial_no),
+                x='longitude',
+                y='latitude'
+            )
             hydrophones[serial_no], = ax.plot([], [], linestyle='None', marker='o', label=str(serial_no))
             hydrophone_circles[serial_no] = mpl.patches.Circle((0, 0), 0, fill=False, linewidth=1)
-            hydrophone_r_series[serial_no] = pd.Series(
-                self._measurement_history[self._hydrophone_history == serial_no, 0],
-                index=self._time_history[self._step_history == Filter.CORRECTION][self._hydrophone_history == serial_no])
             ax.add_patch(hydrophone_circles[serial_no])
         
         # Plot the best particle's path
@@ -247,6 +303,7 @@ class ParticleFilter(Filter):
         # Plot the tag's groundtruth path
         groundtruth_path_x = []
         groundtruth_path_y = []
+        groundtruth_traj = mpd.Trajectory(dataset.df.set_index('datetime'), 'tag_traj', x='tag_longitude', y='tag_latitude')
         groundtruth_path, = ax.plot([], [], 'bo', label='true path')
 
         # Plot particle positions
@@ -258,12 +315,12 @@ class ParticleFilter(Filter):
         # Artists indexed later are drawn over ones indexed earlier
         artists = [
             background,
-            particles,
             *hydrophones.values(),
             *hydrophone_circles.values(),
             best_particle_path_2,
             best_particle_path,
             groundtruth_path,
+            particles,
             steps
         ]
 
@@ -272,7 +329,7 @@ class ParticleFilter(Filter):
             return artists
         
         def update(frame):
-            # print('Frame:', frame)
+            print('Frame:', frame)
             curr_time = self._time_history[frame]
 
             # Reset paths on the first frame
@@ -289,7 +346,8 @@ class ParticleFilter(Filter):
             best_particle_path_2.set_data(best_particle_path_x, best_particle_path_y)
 
             # Plot groundtruth path
-            pos = dataset.get_tag_xy(curr_time)
+            pos = groundtruth_traj.get_position_at(curr_time)
+            pos = utils.to_cartesian((pos.y, pos.x), origin)
             groundtruth_path_x.append(pos[0])
             groundtruth_path_y.append(pos[1])
             groundtruth_path.set_data(groundtruth_path_x, groundtruth_path_y)
@@ -299,84 +357,34 @@ class ParticleFilter(Filter):
 
             # Plot hydrophones
             for serial_no, hydrophone in hydrophones.items():
-                smooth_pos = dataset.get_hydrophone_xy(serial_no, curr_time, mode='interpolate')
-                pos = dataset.get_hydrophone_xy(serial_no, curr_time, mode='last')
-                if smooth_pos is not None:
-                    hydrophone.set_data([smooth_pos[0]], [smooth_pos[1]])
-                # r = dataset.get_gps_distance(serial_no, curr_time)
-                r_series = hydrophone_r_series[serial_no]
-                r = Dataset.get(r_series, curr_time, mode='last')[1]
-                if r is not None and pos is not None:
-                    hydrophone_circles[serial_no].set(center=pos, radius=r)
+                hydrophone_traj = hydrophone_trajs[serial_no]
+                pos = hydrophone_traj.get_position_at(curr_time)
+                pos = utils.to_cartesian((pos.y, pos.x), origin)
+                hydrophone.set_data([pos[0]], [pos[1]])
+                idx = bisect.bisect(hydrophone_traj.df.index, curr_time) - 1
+                r = hydrophone_traj.df.iloc[idx]['gps_distance']
+                hydrophone_circles[serial_no].set(center=pos, radius=r)
             
             # Update steps
             steps.set_text('Step = {} / {}'.format(frame, num_steps))
 
             return artists
-        anim = animation.FuncAnimation(fig, update, frames=range(0, num_steps, 1), init_func=init, blit=True, interval=2, repeat=True)
+        anim = animation.FuncAnimation(fig, update, frames=range(0, num_steps, 10), init_func=init, blit=False, interval=33, repeat=True)
         plt.show()
 
 if __name__ == '__main__':
-    dataset = Dataset('tag78_swimming_test_1_2')
-    save_history = True
-    # hydrophone_params = {
-    #     'VR100': {'m': -0.10527966, 'l': -0.55164737, 'b': 68.59493072, 'signal_var': 16.250003, 'ff': 0.3},
-    #     457049: {'m': -0.20985953, 'l': 5.5568182, 'b': 76.90064068, 'signal_var': 9.400336, 'ff': 0.3}
-    # }
-    hydrophone_params = {
-        'VR100': {'m': -0.10527966, 'l': -0.55164737, 'b': 68.59493072, 'signal_var': 1000, 'ff': 0.1, 'initial_r': 0},
-        457049: {'m': -0.20985953, 'l': 5.5568182, 'b': 76.90064068, 'signal_var': 1000, 'ff': 0.1, 'initial_r': 0}
-    }
+    dataset = merge_dataset('tag78_swimming_test_1')
+    pf = ParticleFilter.from_dataset(dataset, 100, RandomMotionModel, motion_model_params={
+        'uniform_random': [(-100, 100), (-100, 100)]
+    }, save_history=True, hydrophone_params={
+        'VR100': {'m': -0.10527966, 'l': -0.55164737, 'b': 68.59493072, 'signal_var': 16.250003},
+        457049: {'m': -0.20985953, 'l': 5.5568182, 'b': 76.90064068, 'signal_var': 9.400336}
+    })
 
-    start_time = dataset.start_time
-    end_time = dataset.end_time
-    num_predictions = int(np.floor((end_time - start_time).total_seconds()))
+    pf.run()
+    for serial_no, kf in pf._filters.items():
+        df = dataset.df[dataset.df['serial_no'] == serial_no]
+        groundtruth = np.column_stack([df['gps_distance'], df['gps_speed']])
+        kf.plot(groundtruth, save=False)
+    # pf.plot(dataset)
 
-    # Create a kalman filter for each hydrophone
-    filters =   {serial_no :
-                    KalmanFilter.from_dataset(
-                        dataset, serial_no,
-                        save_history=save_history,
-                        **hydrophone_params.get(serial_no, {}))
-                for serial_no in dataset.hydrophones}
-    
-    pf = ParticleFilter(1000, RandomMotionModel, motion_model_params={
-        'uniform_random': [(0, 200), (-150, 50)]
-    }, save_history=True)
-
-    # Queue predictions
-    for i in range(num_predictions):
-        timestamp = start_time + timedelta(seconds=i)
-        pf.queue_prediction(timestamp, np.array([]))
-    
-    # Queue measurements
-    for serial_no in dataset.hydrophones:
-        data = dataset.hydrophones[serial_no].detections
-        times = data.index
-
-        # Use kalman filter to estimate ranges
-        kf = filters[serial_no]
-        kf.run()
-        kf.plot(dataset, serial_no)
-        is_correction = kf._step_history == Filter.CORRECTION
-        measurements = kf._history[is_correction, :]
-        # measurement_covs = kf._cov_history[is_correction, :]
-
-        # Use groundtruth ranges
-        # measurements = np.array([dataset.get_gps_distance(serial_no, times), dataset.get_gps_speed(serial_no, times)]).T
-        # measurement_covs = np.array([[[100, 0], [0, 100]]] * len(times))
-
-        # Use just time of flight ranges
-        # measurements = np.array([dataset.hydrophones[serial_no].detections['total_distance'], [0]*len(times)]).T
-        measurement_covs = np.array([[[10, 0], [0, 10]]] * len(times))
-
-        coords = utils.to_cartesian(dataset.get_hydrophone_coords(serial_no, times), dataset.origin)
-        thetas = dataset.get_gps_theta(serial_no, times)
-        speeds = dataset.get_gps_vel(serial_no, times)
-
-        for timestamp, (r, r_dot), measurement_cov, (x, y), theta, v in zip(times, measurements, measurement_covs, coords, thetas, speeds):
-            pf.queue_correction(timestamp, [serial_no, np.array([r, r_dot, x, y, theta, v]), measurement_cov])
-    
-    # pf = ParticleFilter.from_dataset(dataset, 100, RandomMotionModel, motion_model_params={
-    #     'uniform_random': [(-100, 100), (-100, 100)]
-    # }, save_history=True)
