@@ -10,11 +10,16 @@ import io
 from PIL import Image
 import uuid
 import geopy.distance
+import matplotlib.pyplot as plt
 
 EARTH_RADIUS = 6371009  # Radius of the earth in meters
 USER_AGENT = "contextily-" + uuid.uuid4().hex
 SPEED_OF_SOUND = 1460  # m/s in water
 avg_dt_dict = {65477: 8.179110, 65478: 8.179071, 65479: 7.958926}
+
+# Default matplotlib colors
+prop_cycle = plt.rcParams['axes.prop_cycle']
+colors = prop_cycle.by_key()['color']
 
 def find_files(*sources, name=None, extension=None):
     '''
@@ -163,7 +168,10 @@ def iir_filter(x, ff=1):
 
 def mkdir(path):
     '''Create a directory if it does not exist'''
-    if not os.path.isdir(path):
+    path, ext = os.path.splitext(path)
+    if ext != '':
+        mkdir(os.path.split(path)[0])
+    elif not os.path.isdir(path):
         parent, _ = os.path.split(path)
         mkdir(parent)
         os.mkdir(path)
@@ -386,12 +394,15 @@ def apply_along_axes(func, axes, arr, *args, **kwargs):
     func1d = lambda x: func(reshape(x))
     return np.apply_along_axis(func1d, axes[0], combine_axes(arr, axes), *args, **kwargs)
 
-def pad_bounds(bounds, f=1):
+def pad_bounds(bounds, f=1, square=False):
     (min_x, min_y), (max_x, max_y) = bounds
     mid_x = (max_x + min_x) / 2
     mid_y = (max_y + min_y) / 2
     range_x = (max_x - min_x) * f
     range_y = (max_y - min_y) * f
+    if square:
+        range_x = max(range_x, range_y)
+        range_y = range_x
     min_x = mid_x - range_x / 2
     max_x = mid_x + range_x / 2
     min_y = mid_y - range_y / 2

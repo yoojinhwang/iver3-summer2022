@@ -270,18 +270,31 @@ if __name__ == '__main__':
     # kf.run()
     # kf.plot(dataset, 457012, save=True, replace=False)
 
-    dataset = Dataset('tag78_50m_increment_long_beach_test_0')
+    # dataset = Dataset('tag78_50m_increment_long_beach_test_0')
+    # kf = KalmanFilter.from_dataset(
+    #     dataset, 457012,
+    #     save_history=True,
+    #     m=-0.070397,
+    #     l=-0.06,
+    #     b=7.74520092e1,
+    #     signal_var=500,
+    #     initial_r=0,
+    #     ff=0.5)
+    # kf.run()
+    # kf.plot(dataset, 457012, save=True, replace=True)
+
+    dataset = Dataset('tag78_shore_2_boat_all_static_test_0')
     kf = KalmanFilter.from_dataset(
-        dataset, 457012,
+        dataset, 457049,
         save_history=True,
-        m=-0.070397,
-        l=-0.06,
-        b=7.74520092e1,
+        m=-0.200123,
+        l=5.5568182,
+        b=77.304460,
         signal_var=500,
         initial_r=0,
-        ff=0.5)
+        ff=0.3)
     kf.run()
-    kf.plot(dataset, 457012, save=True, replace=True)
+    kf.plot(dataset, 457049, save=True, replace=True)
 
     # Idea: make signal variance increase based on the average amount of time between the last n detections
 

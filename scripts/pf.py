@@ -6,11 +6,13 @@ from scipy.stats import multivariate_normal
 import scipy
 import matplotlib as mpl
 import matplotlib.pyplot as plt
+import matplotlib.gridspec as gridspec
 import matplotlib.animation as animation
 import pandas as pd
 from dataset import Dataset
 from kalman import KalmanFilter
 from datetime import timedelta
+import bisect
 
 class MotionModelBase(ABC):
     '''
@@ -23,15 +25,15 @@ class MotionModelBase(ABC):
 
     @abstractmethod
     def initialize_particles(self, num_particles, **kwargs):
-        uniform_random = kwargs.get('uniform_random', None)
+        init_uniform_random = kwargs.get('init_uniform_random', None)
         particles = np.zeros((num_particles, self.size))
 
         # Initialize weights to 1
         particles[:, -1] = 1
 
         # Initialize particle states according to a uniform random distribution
-        if uniform_random is not None:
-            for i, (low, high) in enumerate(uniform_random):
+        if init_uniform_random is not None:
+            for i, (low, high) in enumerate(init_uniform_random):
                 particles[:, i] = np.random.uniform(low, high, num_particles)
         return particles
     
@@ -71,7 +73,113 @@ class RandomMotionModel(MotionModelBase):
         # Pack up the values and return them
         return np.column_stack([x_f, y_f, theta_f, v_f, omega_f, weight])
 
+class VelocityMotionModel(MotionModelBase):
+    def __init__(self, **kwargs):
+        # Particle: x, y, theta, linear velocity, angular velocity, weight
+        kwargs['name'] = 'velocity'
+        super().__init__(6, **kwargs)
+        self._velocity_mean = kwargs.get('velocity_mean', 0)
+        self._velocity_stdev = kwargs.get('velocity_stdev', 1)
+        self._omega_mean = kwargs.get('omega_mean', 0)
+        self._omega_stdev = kwargs.get('omega_stdev', 1)
+        self._gamma_mean = kwargs.get('gamma_mean', self._omega_mean)
+        self._gamma_stdev = kwargs.get('gamma_stdev', self._omega_stdev)
+    
+    def initialize_particles(self, num_particles, **kwargs):
+        return super().initialize_particles(num_particles, **kwargs)
+    
+    def prediction_step(self, particles, dt):
+        # Don't do anything if no time has passed
+        if dt == 0:
+            return particles
+
+        # Unpack particles
+        x, y, theta, v, omega, weight = particles.T
+
+        # Add some gaussian noise to the current velocity
+        v += np.random.normal(self._velocity_mean, self._velocity_stdev, len(particles))
+
+        # Add some gaussian noise to the current angular velocity
+        omega += np.random.normal(self._omega_mean, self._omega_stdev, len(particles))
+        omega = np.where(np.abs(omega) < 1e-10, np.sign(omega) * 1e-10, omega)  # Bound abs(omega) above 0
+
+        # Add a random angle after the update
+        gamma = np.random.normal(self._gamma_mean, self._gamma_stdev, len(particles))
+
+        # Compute the new position and heading
+        x_c = x - v/omega * np.sin(theta)
+        y_c = y + v/omega * np.cos(theta)
+        x_f = x_c + v/omega * np.sin(theta + omega * dt)
+        y_f = y_c - v/omega * np.cos(theta + omega * dt)
+        theta_f = utils.wrap_to_pi(theta + omega * dt + gamma * dt)
+
+        # Compute the new velocity and angular velocity
+        v_f = np.sqrt(np.square(x_f - x) + np.square(y_f - y)) / dt
+        omega_f = (theta_f - theta) / dt
+
+        # Pack up the values and return them
+        return np.column_stack([x_f, y_f, theta_f, v_f, omega_f, weight])
+
 class ParticleFilter(Filter):
+    def from_dataset(dataset, num_particles, motion_model_type, motion_model_params={}, save_history=False, **kwargs):
+        save_history = True
+        start_time = dataset.start_time
+        end_time = dataset.end_time
+        num_predictions = int(np.floor((end_time - start_time).total_seconds()))
+        use_tof = kwargs.get('use_tof', False)
+        use_groundtruth = kwargs.get('use_groundtruth', False)
+
+        if not use_tof and not use_groundtruth:
+            # Create a kalman filter for each hydrophone
+            hydrophone_params = kwargs.get('hydrophone_params', {})
+            filters =   {serial_no :
+                            KalmanFilter.from_dataset(
+                                dataset, serial_no,
+                                save_history=save_history,
+                                **hydrophone_params.get(serial_no, {}))
+                        for serial_no in dataset.hydrophones}
+        
+        # Create particle filter
+        pf = ParticleFilter(num_particles, motion_model_type, motion_model_params, save_history)
+
+        # Queue predictions
+        for i in range(num_predictions):
+            timestamp = start_time + timedelta(seconds=i)
+            pf.queue_prediction(timestamp, np.array([]))
+        
+        # Queue measurements
+        for serial_no in dataset.hydrophones:
+            data = dataset.hydrophones[serial_no].detections
+            times = data.index
+
+            # Retrieve measurement covariances
+            measurement_covs = np.array([kwargs.get('measurement_cov', [[10, 0], [0, 10]])] * len(times))
+            if use_tof:
+                # Use just time of flight ranges
+                measurements = np.array([dataset.hydrophones[serial_no].detections['total_distance'], [0]*len(times)]).T
+            elif use_groundtruth:
+                # Use groundtruth ranges
+                measurements = np.array([dataset.get_gps_distance(serial_no, times), dataset.get_gps_speed(serial_no, times)]).T
+            else:
+                # Use kalman filter to estimate ranges
+                kf = filters[serial_no]
+                kf.run()
+                kf.plot(dataset, serial_no)
+                is_correction = kf._step_history == Filter.CORRECTION
+                measurements = kf._history[is_correction, :]
+                if 'measurement_cov' not in kwargs:
+                    measurement_covs = kf._cov_history[is_correction, :]
+
+            # Build other parts of the measurements
+            coords = utils.to_cartesian(dataset.get_hydrophone_coords(serial_no, times), dataset.origin)
+            thetas = dataset.get_gps_theta(serial_no, times)
+            speeds = dataset.get_gps_vel(serial_no, times)
+
+            data = zip(times, measurements, measurement_covs, coords, thetas, speeds)
+            for timestamp, (r, r_dot), measurement_cov, (x, y), theta, v in data:
+                pf.queue_correction(timestamp, [serial_no, np.array([r, r_dot, x, y, theta, v]), measurement_cov])
+        return pf
+
     def __init__(self, num_particles, motion_model_type, motion_model_params={}, save_history=False):
         self._save_history = save_history
         self._num_particles = num_particles
@@ -100,8 +208,9 @@ class ParticleFilter(Filter):
         self._time_history = np.zeros((0,), dtype=object)
         self._hydrophone_history = np.zeros((0,), dtype=object)
         self._measurement_history = np.zeros((0, 6))
+        self._measurement_cov_history = np.zeros((0, 2, 2))
     
-    def _update_history(self, timestamp, step_type, serial_no=None, measurement=None):
+    def _update_history(self, timestamp, step_type, serial_no=None, measurement=None, measurement_cov=None):
         if self._save_history:
             self._history = np.concatenate([self._history, [self._particles]])
             self._step_history = np.concatenate([self._step_history, [step_type]])
@@ -109,6 +218,7 @@ class ParticleFilter(Filter):
             if step_type == Filter.CORRECTION:
                 self._hydrophone_history = np.concatenate([self._hydrophone_history, [serial_no]])
                 self._measurement_history = np.concatenate([self._measurement_history, [measurement]])
+                self._measurement_cov_history = np.concatenate([self._measurement_cov_history, [measurement_cov]])
     
     def _prediction_step(self, timestamp, data, dt):
         super()._prediction_step(timestamp, data, dt)
@@ -148,7 +258,7 @@ class ParticleFilter(Filter):
         self._particles[:, -1] *= weight
 
         print('Correction step', timestamp)
-        self._update_history(timestamp, Filter.CORRECTION, serial_no, np.array([r, r_dot, *hydrophone_state]))
+        self._update_history(timestamp, Filter.CORRECTION, serial_no, np.array([r, r_dot, *hydrophone_state]), measurement_cov)
     
     def _resample_step(self):
         # Resample if possible
@@ -164,17 +274,276 @@ class ParticleFilter(Filter):
             print('Skipped measurement(s) due to nan weights')
         self._particles[:, -1] = 1
 
-    # def plot(self, dataset):
-    #     fig, ax = plt.subplots()
-    #     tag_x, tag_y = np.array(dataset.tag.coords[['x', 'y']]).T
-    #     avg_particle = np.average(self._history, axis=1)
-    #     avg_x, avg_y = avg_particle[:, 0], avg_particle[:, 1]
-    #     ax.plot(tag_x, tag_y, marker='.', label='tag trajectory')
-    #     ax.plot(avg_x, avg_y, marker='.', label='pf estimate')
-    #     ax.legend()
-    #     plt.show()
+    def plot(self, dataset, show=True, save=False, replace=False, **kwargs):
+        padding = kwargs.get('padding', 1.1)
+        no_titles = kwargs.get('exclude_titles', False)
+        width = kwargs.get('width', 3.5)
 
-    def plot(self, dataset, padding=1.1, square=True):
+        # Set up figure and axes
+        fig, ax = plt.subplots(figsize=(width, width))
+
+        avg_particle = np.average(self._history, axis=1)  # Find the average particle at each time step
+
+        # Find a bounding box that always shows the average particle, the hydrophones, and the tag
+        all_x = np.concatenate([
+            avg_particle[:, 0].flatten(),
+            dataset.tag.coords['x'].to_numpy(),
+            self._measurement_history[:, 2].astype(np.float64)
+        ])  # Concatenate all relevant x coordinates
+        all_y = np.concatenate([
+            avg_particle[:, 1].flatten(),
+            dataset.tag.coords['y'].to_numpy(),
+            self._measurement_history[:, 3].astype(np.float64)
+        ])  # Concatenate all relevant y coordinates
+        all_x = all_x[~np.isnan(all_x)]
+        all_y = all_y[~np.isnan(all_y)]
+        (minx, miny), (maxx, maxy) = utils.pad_bounds(((np.min(all_x), np.min(all_y)), (np.max(all_x), np.max(all_y))), f=padding, square=True)
+        bbox = (minx, miny, maxx, maxy)
+        ax.set_xlim((minx, maxx))
+        ax.set_ylim((miny, maxy))
+
+        # Create background map
+        origin = dataset.origin
+        cartesian_bounds = np.array(bbox).reshape(2, 2).T
+        cartesian_bounds = utils.pad_bounds(cartesian_bounds.T).T
+        if origin is not None:
+            coord_bounds = utils.to_coords(cartesian_bounds, origin)
+            (south, west), (north, east) = coord_bounds
+            img, ext = utils.bounds2img(west, south, east, north, zoom=17, map_dir='../maps/OpenStreetMap/Mapnik')
+            true_ext = utils.to_cartesian(np.flip(np.array(ext).reshape(2, 2), axis=0), origin).T.flatten()
+        ax.imshow(img, extent=true_ext)
+
+        # Plot hydrophone paths
+        for name, data in dataset.hydrophones.items():
+            x, y = data.coords['x'], data.coords['y']
+            dx, dy = np.concatenate([np.diff(x), [0]]), np.concatenate([np.diff(y), [0]])
+            detection_x, detection_y = dataset.get_hydrophone_xy(name, data.detections.index).T
+            l, = ax.plot(x, y, marker='o', label='{} coords'.format(name))
+            ax.plot(detection_x, detection_y, marker='.', linestyle='None', label='{} detections'.format(name))
+            ax.quiver(x, y, dx, dy, units='xy', angles='xy', scale_units='xy', scale=1, color=l.get_color())
+
+        # Plot groundtruth path
+        x, y = np.array(dataset.tag.coords[['x', 'y']]).T
+        dx, dy = np.concatenate([np.diff(x), [0]]), np.concatenate([np.diff(y), [0]])
+        l, = ax.plot(x, y, marker='o', label='Tag coords')
+        ax.quiver(x, y, dx, dy, units='xy', angles='xy', scale_units='xy', scale=1, color=l.get_color())
+
+        # Plot particle path
+        x, y = avg_particle[:, [0, 1]].T
+        dx, dy = np.concatenate([np.diff(x), [0]]), np.concatenate([np.diff(y), [0]])
+        l, = ax.plot(x, y, marker='.', label='Tag estimated coords', color='teal')
+        ax.quiver(x, y, dx, dy, units='xy', angles='xy', scale_units='xy', scale=1, color=l.get_color())
+
+        # Final prep
+        num_entries = 2*len(dataset.hydrophones)+2
+        handles, labels = ax.get_legend_handles_labels()
+        actual_entries = len(handles)
+        handles = np.array(handles + [None]*(num_entries-actual_entries)).reshape(-1, 2).T.flatten()[:num_entries]
+        labels = np.array(labels + [None]*(num_entries-actual_entries)).reshape(-1, 2).T.flatten()[:num_entries]
+        ax.legend(handles, labels, loc='upper right', ncol=2)
+        ax.set_xlabel('x (m)')
+        ax.set_ylabel('y (m)')
+        if not no_titles:
+            ax.set_title('Trajectories')
+
+        # Show and save the plot
+        if show:
+            plt.show()
+        if save and dataset is not None:
+            savepath = kwargs.get('savepath', utils.add_version('../datasets/{n}/pf_plots/{n}_pf_trajectories.png'.format(n=dataset.name), replace=replace))
+            print('Saving to {}'.format(savepath))
+            utils.savefig(fig, savepath, bbox_inches='tight')
+        plt.close()
+
+    def plot_error(self, dataset, show=True, save=False, replace=False, **kwargs):
+        zoom_times = kwargs.get('zoom_times', [])
+        n = len(zoom_times)
+        ratio = kwargs.get('ratio', 2)
+        width = kwargs.get('width', 3.5)
+        seconds = kwargs.get('plot_total_seconds', False)
+        padding = kwargs.get('padding', 1.1)
+        no_titles = kwargs.get('exclude_titles', False)
+
+        # Set up figure and axes
+        if n > 0:
+            arr = mpl.figure.figaspect((1+ratio)/ratio)
+            w, h = width * arr / arr[0]
+            fig = plt.figure(constrained_layout=True, figsize=(width, width))
+            gs0 = gridspec.GridSpec(2, 1, figure=fig, height_ratios=[ratio, 1])
+            gs1 = gs0[1].subgridspec(1, n)
+
+            ax0 = fig.add_subplot(gs0[0])
+            axs = [fig.add_subplot(gs1[0])]
+            axs += [fig.add_subplot(gs1[i], sharey=axs[0]) for i in range(1, n)]
+
+            for ax in axs:
+                ax.set_aspect(1)
+                ax.get_xaxis().set_visible(False)
+                ax.get_yaxis().set_visible(False)
+        else:
+            fig, ax0 = plt.figure(tight_layout=True)
+            axs = []
+
+        # Plot errors
+        avg_particle = np.average(self._history, axis=1)  # Find the average particle at each time step
+        times = self._time_history
+        is_correction = self._step_history == Filter.CORRECTION
+        correction_times = times[is_correction]
+        true_x, true_y = dataset.get_tag_xy(times).T
+        x_error = true_x - avg_particle[:, 0]
+        x_error_corr = true_x[is_correction] - avg_particle[is_correction, 0]
+        y_error = true_y - avg_particle[:, 1]
+        y_error_corr = true_y[is_correction] - avg_particle[is_correction, 1]
+        dist = np.sqrt(np.square(x_error) + np.square(y_error))
+        dist_corr = np.sqrt(np.square(x_error_corr) + np.square(y_error_corr))
+
+        # Convert to total seconds
+        if seconds:
+            start_time = times[0]
+            times = utils.total_seconds(times, start_time)
+            correction_times = utils.total_seconds(correction_times, start_time)
+        ax0.plot(times, [0]*len(times))
+        if kwargs.get('error_values', False):
+            hline_kwargs_0 = {'xmin': 0, 'xmax': 1, 'linestyle': 'None', 'linewidth': 0.8}
+            hline_kwargs_1 = {'xmin': 0, 'xmax': 1, 'linestyle': 'None', 'linewidth': 0.8}
+            l0, = ax0.plot(times, x_error, label='x error'.format(np.max(np.abs(x_error)), np.average(x_error)))
+            l1, = ax0.plot(times, y_error, label='y error'.format(np.max(np.abs(y_error)), np.average(y_error)))
+            l2, = ax0.plot(times, dist, label='distance'.format(np.max(dist), np.average(dist)))
+            ax0.scatter(correction_times, [0]*len(correction_times), marker='.', label='detections')
+
+            max_abs = [max(np.max(x_error), np.min(x_error), key=np.abs), max(np.max(y_error), np.min(y_error), key=np.abs), np.max(dist)]
+            ax0.axhline(max_abs[0], color=l0.get_color(), label='max abs = {:.2f}'.format(max_abs[0]), **hline_kwargs_0)
+            ax0.axhline(max_abs[1], color=l1.get_color(), label='max abs = {:.2f}'.format(max_abs[1]), **hline_kwargs_0)
+            ax0.axhline(max_abs[2], color=l2.get_color(), label='max = {:.2f}'.format(max_abs[2]), **hline_kwargs_0)
+
+            avgs = [np.average(x_error), np.average(y_error), np.average(dist)]
+            ax0.axhline(avgs[0], color=l0.get_color(), label='avg = {:.2f}'.format(avgs[0]), **hline_kwargs_1)
+            ax0.axhline(avgs[1], color=l1.get_color(), label='avg = {:.2f}'.format(avgs[1]), **hline_kwargs_1)
+            ax0.axhline(avgs[2], color=l2.get_color(), label='avg = {:.2f}'.format(avgs[2]), **hline_kwargs_1)
+        else:
+            # l, = ax0.plot(times, x_error, label='x error, max abs={:.2f}, avg={:.2f}'.format(np.max(np.abs(x_error)), np.average(x_error)))
+            # l, = ax0.plot(times, y_error, label='y error, max abs={:.2f}, avg={:.2f}'.format(np.max(np.abs(y_error)), np.average(y_error)))
+            # l, ax0.plot(times, dist, label='distance, max={:.2f}, avg={:.2f}'.format(np.max(dist), np.average(dist)))
+            ax0.plot(times, x_error, label='x error')
+            ax0.plot(times, y_error, label='y error')
+            ax0.plot(times, dist, label='distance')
+            ax0.scatter(correction_times, [0]*len(correction_times), marker='.', label='detections')
+
+        ax0.scatter(correction_times, x_error_corr, marker='.')
+        ax0.scatter(correction_times, y_error_corr, marker='.')
+        ax0.scatter(correction_times, dist_corr, marker='.')
+        if kwargs.get('legend_outside', False):
+            ax0.legend(loc='center left', ncol=3, bbox_to_anchor=(1, 0.5))
+        else:
+            ax0.legend(loc='upper right', ncol=3)
+
+        # Plot zooms
+        if n > 0:
+            # Find a bounding box that always shows the average particle, the hydrophones, and the tag
+            all_x = np.concatenate([
+                self._history[:, :, 0].flatten(),
+                dataset.tag.coords['x'].to_numpy(),
+                self._measurement_history[:, 2].astype(np.float64)
+            ])  # Concatenate all relevant x coordinates
+            all_y = np.concatenate([
+                self._history[:, :, 1].flatten(),
+                dataset.tag.coords['y'].to_numpy(),
+                self._measurement_history[:, 3].astype(np.float64)
+            ])  # Concatenate all relevant y coordinates
+            all_x = all_x[~np.isnan(all_x)]
+            all_y = all_y[~np.isnan(all_y)]
+            (minx, miny), (maxx, maxy) = utils.pad_bounds(((np.min(all_x), np.min(all_y)), (np.max(all_x), np.max(all_y))), f=padding, square=True)
+            bbox = (minx, miny, maxx, maxy)
+            for ax in axs:
+                ax.set_xlim((minx, maxx))
+                ax.set_ylim((miny, maxy))
+
+            # Create background map
+            origin = dataset.origin
+            cartesian_bounds = np.array(bbox).reshape(2, 2).T
+            cartesian_bounds = utils.pad_bounds(cartesian_bounds.T).T
+            if origin is not None:
+                coord_bounds = utils.to_coords(cartesian_bounds, origin)
+                (south, west), (north, east) = coord_bounds
+                img, ext = utils.bounds2img(west, south, east, north, zoom=17, map_dir='../maps/OpenStreetMap/Mapnik')
+                true_ext = utils.to_cartesian(np.flip(np.array(ext).reshape(2, 2), axis=0), origin).T.flatten()
+            for ax in axs:
+                ax.imshow(img, extent=true_ext)
+
+            # Fill zoom axes
+            for (time, ax) in zip(zoom_times, axs):
+
+                if type(time) == int:
+                    idx = time
+                    timestamp = self._time_history[idx]
+                    time = times[idx]
+                else:
+                    idx = max(bisect.bisect_left(self._time_history, time), 0)
+                    timestamp = self._time_history[idx]
+                    time = times[idx]
+                
+                # Plot particles
+                ax.scatter(self._history[idx, :, 0], self._history[idx, :, 1], linestyle='None', marker='.', color='gold')
+
+                # Plot hydrophone paths
+                for name, data in dataset.hydrophones.items():
+                    x, y = data.coords['x'][:timestamp], data.coords['y'][:timestamp]
+                    detection_x, detection_y = dataset.get_hydrophone_xy(name, data.detections[:timestamp].index).T
+                    ax.plot(x, y, marker='o', label='{} path'.format(name))
+                    ax.plot(detection_x, detection_y, marker='.', linestyle='None', label='{} detections'.format(name))
+
+                    # Draw circles showing the last measurement
+                    pos = dataset.get_hydrophone_xy(name, timestamp, mode='last')
+                    r_series = pd.Series(
+                        self._measurement_history[self._hydrophone_history == name, 0],
+                        index=self._time_history[self._step_history == Filter.CORRECTION][self._hydrophone_history == name])
+                    r_std_series = pd.Series(
+                        np.sqrt(self._measurement_cov_history[self._hydrophone_history == name, 0, 0]),
+                        index=self._time_history[self._step_history == Filter.CORRECTION][self._hydrophone_history == name])
+                    r = Dataset.get(r_series, timestamp, mode='last')[1]
+                    r_std = Dataset.get(r_std_series, timestamp, mode='last')[1]
+                    if r is not None and pos is not None:
+                        ax.add_patch(mpl.patches.Circle(pos, r, fill=False, linewidth=1, zorder=0))
+                        ax.add_patch(mpl.patches.Circle(pos, r-r_std, fill=False, linewidth=1, color='gray', zorder=0))
+                        ax.add_patch(mpl.patches.Circle(pos, r+r_std, fill=False, linewidth=1, color='gray', zorder=0))
+
+                # Plot groundtruth path
+                x, y = np.array(dataset.tag.coords[['x', 'y']][:timestamp]).T
+                ax.plot(x, y, marker='.', label='tag true path')
+
+                # Plot particle path
+                x, y = avg_particle[:idx, [0, 1]].T
+                ax.plot(x, y, marker='.', label='tag estimated path', color='teal')
+
+                # Add lines indicating where the zooms came from
+                ax0.axvline(time, ymin=0, ymax=1, color='gray', linewidth=0.5)
+                miny = ax0.get_ylim()[0]
+                con_left = mpl.patches.ConnectionPatch(xyA=(time, miny), coordsA=ax0.transData, xyB=(0, 1), coordsB=ax.transAxes, color='gray', linewidth=0.5)
+                con_right = mpl.patches.ConnectionPatch(xyA=(time, miny), coordsA=ax0.transData, xyB=(1, 1), coordsB=ax.transAxes, color='gray', linewidth=0.5)
+                fig.add_artist(con_left)
+                fig.add_artist(con_right)
+
+                # Set title to the timestamp
+                ax.set_title(str(time), fontsize=10)
+
+        # Set and figure titles
+        if seconds:
+            ax0.set_xlabel('Time (s)')
+        else:
+            ax0.set_xlabel('Time')
+        ax0.set_ylabel('Meters')
+        if not no_titles:
+            ax0.set_title('Errors')
+
+        if show:
+            plt.show()
+        if save and dataset is not None:
+            savepath = kwargs.get('savepath', utils.add_version('../datasets/{n}/pf_plots/{n}_pf_error.png'.format(n=dataset.name), replace=replace))
+            print('Saving to {}'.format(savepath))
+            utils.savefig(fig, savepath, bbox_inches='tight')
+        plt.close()
+
+    def animate(self, dataset, padding=1.1, show=True, save=False, replace=False):
         # Make sure we have the data to plot
         if not self._save_history:
             print('No history to plot')
@@ -197,19 +566,7 @@ class ParticleFilter(Filter):
         ])  # Concatenate all relevant y coordinates
         all_x = all_x[~np.isnan(all_x)]
         all_y = all_y[~np.isnan(all_y)]
-        minx, miny, maxx, maxy = (np.min(all_x), np.min(all_y), np.max(all_x), np.max(all_y))
-
-        # Expand the bounding box by (padding-1)%
-        midx = (maxx + minx) / 2
-        midy = (maxy + miny) / 2
-        deltax = (maxx - minx) * padding
-        deltay = (maxy - miny) * padding
-        if square:
-            deltax = deltay = max(deltax, deltay)
-        minx = midx - deltax / 2
-        maxx = midx + deltax / 2
-        miny = midy - deltay / 2
-        maxy = midy + deltay / 2
+        (minx, miny), (maxx, maxy) = utils.pad_bounds(((np.min(all_x), np.min(all_y)), (np.max(all_x), np.max(all_y))), f=padding, square=True)
         bbox = (minx, miny, maxx, maxy)
         plt.xlim([minx, maxx])
         plt.ylim([miny, maxy])
@@ -229,41 +586,59 @@ class ParticleFilter(Filter):
         # Plot the hydrophones' locations and detections
         hydrophones = {}
         hydrophone_circles = {}
+        hydrophone_outer_std_1 = {}
+        hydrophone_inner_std_1 = {}
         hydrophone_r_series = {}
+        hydrophone_r_std_series = {}
         for serial_no in dataset.hydrophones:
             hydrophones[serial_no], = ax.plot([], [], linestyle='None', marker='o', label=str(serial_no))
             hydrophone_circles[serial_no] = mpl.patches.Circle((0, 0), 0, fill=False, linewidth=1)
+            hydrophone_outer_std_1[serial_no] = mpl.patches.Circle((0, 0), 0, fill=False, linewidth=1, color='gray')
+            hydrophone_inner_std_1[serial_no] = mpl.patches.Circle((0, 0), 0, fill=False, linewidth=1, color='gray')
             hydrophone_r_series[serial_no] = pd.Series(
                 self._measurement_history[self._hydrophone_history == serial_no, 0],
                 index=self._time_history[self._step_history == Filter.CORRECTION][self._hydrophone_history == serial_no])
+            hydrophone_r_std_series[serial_no] = pd.Series(
+                np.sqrt(self._measurement_cov_history[self._hydrophone_history == serial_no, 0, 0]),
+                index=self._time_history[self._step_history == Filter.CORRECTION][self._hydrophone_history == serial_no])
             ax.add_patch(hydrophone_circles[serial_no])
+            ax.add_patch(hydrophone_outer_std_1[serial_no])
+            ax.add_patch(hydrophone_inner_std_1[serial_no])
         
         # Plot the best particle's path
         best_particle_path_x = []
         best_particle_path_y = []
-        best_particle_path, = ax.plot([], [], 'r-', label='est path')
-        best_particle_path_2, = ax.plot([], [], linestyle='None', marker='.', color='red')
+        best_particle_path, = ax.plot([], [], color='red', marker='.', label='est path')
+        # best_particle_path_2, = ax.plot([], [], linestyle='None', marker='.', color='red')
 
         # Plot the tag's groundtruth path
         groundtruth_path_x = []
         groundtruth_path_y = []
-        groundtruth_path, = ax.plot([], [], 'bo', label='true path')
+        groundtruth_path, = ax.plot([], [], 'b-', label='true path')
+        last_coords_idx = None
+        groundtruth_coords_x = []
+        groundtruth_coords_y = []
+        groundtruth_coords, = ax.plot([], [], color='blue', marker='.', linestyle='None')
 
         # Plot particle positions
         particles, = ax.plot([], [], linestyle='None', marker='o', color='gold', label='particles')
 
         # Plot the number of elapsed steps
         steps = ax.text(3, 6, 'Step = 0 / {}'.format(num_steps), horizontalalignment='center', verticalalignment='top')
+        ax.legend()
 
         # Artists indexed later are drawn over ones indexed earlier
         artists = [
             background,
             particles,
             *hydrophones.values(),
+            *hydrophone_inner_std_1.values(),
             *hydrophone_circles.values(),
-            best_particle_path_2,
+            *hydrophone_outer_std_1.values(),
+            # best_particle_path_2,
             best_particle_path,
             groundtruth_path,
+            groundtruth_coords,
             steps
         ]
 
@@ -272,27 +647,37 @@ class ParticleFilter(Filter):
             return artists
         
         def update(frame):
+            global last_coords_idx
             # print('Frame:', frame)
             curr_time = self._time_history[frame]
 
             # Reset paths on the first frame
             if frame == 0:
-                groundtruth_path_x.clear()
-                groundtruth_path_y.clear()
                 best_particle_path_x.clear()
                 best_particle_path_y.clear()
+                groundtruth_path_x.clear()
+                groundtruth_path_y.clear()
+                groundtruth_coords_x.clear()
+                groundtruth_coords_y.clear()
+                last_coords_idx = None
             
             # Plot best particle path
             best_particle_path_x.append(avg_particle[frame, 0])
             best_particle_path_y.append(avg_particle[frame, 1])
             best_particle_path.set_data(best_particle_path_x, best_particle_path_y)
-            best_particle_path_2.set_data(best_particle_path_x, best_particle_path_y)
+            # best_particle_path_2.set_data(best_particle_path_x, best_particle_path_y)
 
             # Plot groundtruth path
             pos = dataset.get_tag_xy(curr_time)
+            idx, last_pos = Dataset.get(dataset.tag.coords, curr_time)
             groundtruth_path_x.append(pos[0])
             groundtruth_path_y.append(pos[1])
             groundtruth_path.set_data(groundtruth_path_x, groundtruth_path_y)
+            if last_pos is not None and idx != last_coords_idx:
+                groundtruth_coords_x.append(last_pos.x)
+                groundtruth_coords_y.append(last_pos.y)
+                groundtruth_coords.set_data(groundtruth_coords_x, groundtruth_coords_y)
+                last_coords_idx = idx
 
             # Plot other particles' poses
             particles.set_data(pf._history[frame, :, 0], pf._history[frame, :, 1])
@@ -303,80 +688,52 @@ class ParticleFilter(Filter):
                 pos = dataset.get_hydrophone_xy(serial_no, curr_time, mode='last')
                 if smooth_pos is not None:
                     hydrophone.set_data([smooth_pos[0]], [smooth_pos[1]])
+
                 # r = dataset.get_gps_distance(serial_no, curr_time)
                 r_series = hydrophone_r_series[serial_no]
+                r_std_series = hydrophone_r_std_series[serial_no]
                 r = Dataset.get(r_series, curr_time, mode='last')[1]
+                r_std = Dataset.get(r_std_series, curr_time, mode='last')[1]
                 if r is not None and pos is not None:
                     hydrophone_circles[serial_no].set(center=pos, radius=r)
+                    hydrophone_outer_std_1[serial_no].set(center=pos, radius=r + r_std)
+                    hydrophone_inner_std_1[serial_no].set(center=pos, radius=r - r_std)
             
             # Update steps
             steps.set_text('Step = {} / {}'.format(frame, num_steps))
 
             return artists
         anim = animation.FuncAnimation(fig, update, frames=range(0, num_steps, 1), init_func=init, blit=True, interval=2, repeat=True)
-        plt.show()
+        if show:
+            plt.show()
+        if save and dataset is not None:
+            savepath = utils.add_version('../datasets/{n}/pf_plots/{n}_pf_anim.gif'.format(n=dataset.name), replace=replace)
+            print('Saving animation to {}'.format(savepath))
+            utils.mkdir(savepath)
+            writergif = animation.PillowWriter(fps=30)
+            anim.save(savepath, writer=writergif)
+            print('Animation Saved!')
+        plt.close()
 
 if __name__ == '__main__':
-    dataset = Dataset('tag78_swimming_test_1_2')
-    save_history = True
+    # dataset = Dataset('tag78_swimming_test_1_2', shift_tof=True)
+    # dataset = Dataset('tag78_shore_2_boat_all_static_test_1', shift_tof=True)
+    dataset = Dataset('tag78_shore_2_boat_all_static_test_0', shift_tof=True)
+    # dataset = Dataset('tag78_50m_increment_long_beach_test_0', reset_tof=True, shift_tof=True)
+    pf = ParticleFilter.from_dataset(dataset, 1000, RandomMotionModel, motion_model_params={
+                'init_uniform_random': [(0, 200), (-150, 50)]
+            }, save_history=True, hydrophone_params={
+                'VR100': {'m': -0.10527966, 'l': -0.55164737, 'b': 68.59493072, 'signal_var': 1000, 'ff': 0.1, 'initial_r': 0},
+                457049: {'m': -0.20985953, 'l': 5.5568182, 'b': 76.90064068, 'signal_var': 1000, 'ff': 0.1, 'initial_r': 0}
+            }, use_tof=True, measurement_cov=np.array([[10, 0], [0, 10]]))
+    pf.run()
+    pf.plot(dataset, show=True, save=True, exclude_titles=True, width=7, savepath='../paper/fig4.png')
+    # pf.plot_error(dataset, show=True, save=True, exclude_titles=True, plot_total_seconds=True, zoom_times=[0, 20, 200, -1], ratio=1, error_values=True, width=7, savepath='../paper/fig2.png')
+    pf.plot_error(dataset, show=True, save=True, exclude_titles=True, plot_total_seconds=True, zoom_times=[0, dataset.start_time + timedelta(seconds=44), dataset.start_time + timedelta(seconds=60.5), dataset.start_time + timedelta(seconds=400), -1], ratio=1, error_values=True, width=7, savepath='../paper/fig5.png')
+    # pf.plot_error(dataset, show=True, save=True, exclude_titles=True, plot_total_seconds=True, zoom_times=[0, dataset.start_time + timedelta(seconds=500), dataset.start_time + timedelta(seconds=1500), dataset.start_time + timedelta(seconds=3500), -1], ratio=1, error_values=True, width=7, savepath='../paper/fig8.png')
+
+    # Old hydrophone params
     # hydrophone_params = {
     #     'VR100': {'m': -0.10527966, 'l': -0.55164737, 'b': 68.59493072, 'signal_var': 16.250003, 'ff': 0.3},
     #     457049: {'m': -0.20985953, 'l': 5.5568182, 'b': 76.90064068, 'signal_var': 9.400336, 'ff': 0.3}
     # }
-    hydrophone_params = {
-        'VR100': {'m': -0.10527966, 'l': -0.55164737, 'b': 68.59493072, 'signal_var': 1000, 'ff': 0.1, 'initial_r': 0},
-        457049: {'m': -0.20985953, 'l': 5.5568182, 'b': 76.90064068, 'signal_var': 1000, 'ff': 0.1, 'initial_r': 0}
-    }
-
-    start_time = dataset.start_time
-    end_time = dataset.end_time
-    num_predictions = int(np.floor((end_time - start_time).total_seconds()))
-
-    # Create a kalman filter for each hydrophone
-    filters =   {serial_no :
-                    KalmanFilter.from_dataset(
-                        dataset, serial_no,
-                        save_history=save_history,
-                        **hydrophone_params.get(serial_no, {}))
-                for serial_no in dataset.hydrophones}
-    
-    pf = ParticleFilter(1000, RandomMotionModel, motion_model_params={
-        'uniform_random': [(0, 200), (-150, 50)]
-    }, save_history=True)
-
-    # Queue predictions
-    for i in range(num_predictions):
-        timestamp = start_time + timedelta(seconds=i)
-        pf.queue_prediction(timestamp, np.array([]))
-    
-    # Queue measurements
-    for serial_no in dataset.hydrophones:
-        data = dataset.hydrophones[serial_no].detections
-        times = data.index
-
-        # Use kalman filter to estimate ranges
-        kf = filters[serial_no]
-        kf.run()
-        kf.plot(dataset, serial_no)
-        is_correction = kf._step_history == Filter.CORRECTION
-        measurements = kf._history[is_correction, :]
-        # measurement_covs = kf._cov_history[is_correction, :]
-
-        # Use groundtruth ranges
-        # measurements = np.array([dataset.get_gps_distance(serial_no, times), dataset.get_gps_speed(serial_no, times)]).T
-        # measurement_covs = np.array([[[100, 0], [0, 100]]] * len(times))
-
-        # Use just time of flight ranges
-        # measurements = np.array([dataset.hydrophones[serial_no].detections['total_distance'], [0]*len(times)]).T
-        measurement_covs = np.array([[[10, 0], [0, 10]]] * len(times))
-
-        coords = utils.to_cartesian(dataset.get_hydrophone_coords(serial_no, times), dataset.origin)
-        thetas = dataset.get_gps_theta(serial_no, times)
-        speeds = dataset.get_gps_vel(serial_no, times)
-
-        for timestamp, (r, r_dot), measurement_cov, (x, y), theta, v in zip(times, measurements, measurement_covs, coords, thetas, speeds):
-            pf.queue_correction(timestamp, [serial_no, np.array([r, r_dot, x, y, theta, v]), measurement_cov])
-    
-    # pf = ParticleFilter.from_dataset(dataset, 100, RandomMotionModel, motion_model_params={
-    #     'uniform_random': [(-100, 100), (-100, 100)]
-    # }, save_history=True)

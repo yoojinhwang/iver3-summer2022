@@ -5,6 +5,7 @@ import utils
 import numpy as np
 import utils
 from collections import namedtuple
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 import bisect
 from datetime import datetime
@@ -30,10 +31,11 @@ class Dataset():
         else:
             return [Dataset.get_path(path)]
 
-    def __init__(self, name, start_time=None, end_time=None):
+    def __init__(self, name, start_time=None, end_time=None, **kwargs):
         datasets = yaml.safe_load(open(Dataset.datasets_path, 'r'))
         self.name = name
-        self.attrs = datasets[name]
+        self.attrs = kwargs
+        kwargs['from'] = name
 
         while 'from' in self.attrs:
             from_name = self.attrs['from']
@@ -53,7 +55,10 @@ class Dataset():
             end_time = datetime.fromisoformat(self.attrs['end_time'])
         
         # Whether or not to reset time of flight and related columns
-        reset_tof = self.attrs.get('reset_tof', True)
+        reset_tof = self.attrs.get('reset_tof', False)
+
+        # Whether or not to shift tof distance to match the first gps distance
+        shift_tof = self.attrs.get('shift_tof', False)
 
         # Retrieve origin
         # self.origin = Coordinate(self.attrs['origin']['latitude'], self.attrs['origin']['longitude'])
@@ -163,6 +168,17 @@ class Dataset():
         # Compute time of flight columns of the detections dataframe
         if reset_tof:
             self._update_detections()
+
+        # Shift time of flight columns of the detections dataframe
+        if shift_tof:
+            for name, data in self.hydrophones.items():
+                # Make sure we have detections
+                if len(data.detections) == 0:
+                    break
+                    
+                timestamp = data.detections.index[0]
+                gps_distance = self.get_gps_distance(name, timestamp)
+                data.detections['total_distance'] += gps_distance - data.detections['total_distance'][0]
 
         self.start_time = start_time
         self.end_time = end_time
@@ -371,7 +387,7 @@ class Dataset():
             thetas = utils.angle_between(utils.unit_2d(0), vecs)
             return np.concatenate([[np.nan], thetas])
 
-    def plot(self, save=False, replace=True, show=True):
+    def plot(self, save=False, replace=True, show=True, **kwargs):
         def ints():
             i = 0
             while True:
@@ -380,32 +396,67 @@ class Dataset():
 
         i = ints()
         n = 1 + 2 * len(self.hydrophones)
+        seconds = kwargs.get('plot_total_seconds', False)
+        ratio = kwargs.get('ratio', 5)
+        no_titles = kwargs.get('exclude_titles', False)
+        width = kwargs.get('width', 3.5)
 
-        fig, (ax0, ax1) = plt.subplots(2, 1, gridspec_kw={'height_ratios': [3, 1]})
+        arr = mpl.figure.figaspect((1+ratio)/ratio)
+        w, h = width * arr / arr[0]
+        fig, (ax0, ax1) = plt.subplots(2, 1, gridspec_kw={'height_ratios': [ratio, 1]}, figsize=(w, h))
 
         # Plot hydrophone coordinates and detections
+        all_coords = np.zeros([2, 0])
         for name, data in self.hydrophones.items():
-            ax1.scatter(data.coords.index, [n - next(i)]*len(data.coords))
-            ax1.scatter(data.detections.index, [n - next(i)]*len(data.detections))
+            # Plot total seconds or timestamps
+            if seconds:
+                coords_times = utils.total_seconds(data.coords.index, data.coords.index[0])
+                detections_times = utils.total_seconds(data.detections.index, data.coords.index[0])
+            else:
+                coords_times = data.coords.index
+                detections_times = data.detections.index
+
+            # Add times
+            ax1.scatter(coords_times, [n - next(i)]*len(data.coords))
+            ax1.scatter(detections_times, [n - next(i)]*len(data.detections))
+
+            # Plot coordinates
             x, y = data.coords['longitude'], data.coords['latitude']
+            all_coords = np.concatenate([all_coords, [x, y]], axis=1)
             dx, dy = np.concatenate([np.diff(x), [0]]), np.concatenate([np.diff(y), [0]])
             l, = ax0.plot(x, y, marker='o', label='{} coords'.format(name))
+
+            # Plot detections
             detection_lats, detection_lons = self.get_hydrophone_coords(name, data.detections.index)
             ax0.plot(detection_lons, detection_lats, marker='.', linestyle='None', label='{} detections'.format(name))
             ax0.quiver(x, y, dx, dy, units='xy', angles='xy', scale_units='xy', scale=1, width=0.00001, color=l.get_color())
 
         # Plot tag coordinates
         x, y = self.tag.coords['longitude'], self.tag.coords['latitude']
+        all_coords = np.concatenate([all_coords, [x, y]], axis=1)
         dx, dy = np.concatenate([np.diff(x), [0]]), np.concatenate([np.diff(y), [0]])
         l, = ax0.plot(x, y, marker='.', label='Tag coords')
         ax0.quiver(x, y, dx, dy, units='xy', angles='xy', scale_units='xy', scale=1, width=0.00001, color=l.get_color())
-        if type(self.tag.raw) is np.ndarray:
-            ax1.plot(self.tag.coords.index, [n - next(i)]*2, '-o', color=l.get_color())
+        if seconds:  # Plot total seconds or timestamps
+            tag_times = utils.total_seconds(self.tag.coords.index, self.tag.coords.index[0])
         else:
-            ax1.scatter(self.tag.coords.index, [n - next(i)]*len(self.tag.coords))
+            tag_times = self.tag.coords.index
+        if type(self.tag.raw) is np.ndarray:
+            ax1.plot(tag_times, [n - next(i)]*2, '-o', color=l.get_color(), label='Tag coords')
+        else:
+            ax1.scatter(tag_times, [n - next(i)]*len(self.tag.coords), label='Tag coords')
 
         # Add legend
-        ax0.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+        # Reorder entries
+        num_entries = 2*len(self.hydrophones)+2
+        handles, labels = ax0.get_legend_handles_labels()
+        actual_entries = len(handles)
+        handles = np.array(handles + [None]*(num_entries-actual_entries)).reshape(-1, 2).T.flatten()[:num_entries]
+        labels = np.array(labels + [None]*(num_entries-actual_entries)).reshape(-1, 2).T.flatten()[:num_entries]
+        if kwargs.get('legend_outside', True):
+            ax0.legend(handles, labels, loc='center left', ncol=2, bbox_to_anchor=(1, 0.5))
+        else:
+            ax0.legend(handles, labels, loc='upper right', ncol=2)
 
         # Add background map
         if self.origin is not None:
@@ -418,21 +469,38 @@ class Dataset():
         # Add titles and labels
         ax0.set_xlabel('Longitude')
         ax0.set_ylabel('Latitude')
-        ax0.set_title('Trajectories')
-        ax1.set_xlabel('Time')
+        if not no_titles:
+            ax0.set_title('Trajectories')
+        if seconds:
+            ax1.set_xlabel('Time (s)')
+        else:
+            ax1.set_xlabel('Time')
+        ax1.set_ylabel('Series')
         ax1.set_yticks([])
         ax1.set_yticklabels([])
 
-        fig.suptitle('{} summary'.format(self.name))
+        # Set axes and figure sizes
+        all_x = all_coords[0]
+        all_y = all_coords[1]
+        all_x = all_x[~np.isnan(all_x)]
+        all_y = all_y[~np.isnan(all_y)]
+        (minx, miny), (maxx, maxy) = utils.pad_bounds(((np.min(all_x), np.min(all_y)), (np.max(all_x), np.max(all_y))), f=1.5, square=True)
+        ax0.set_xlim((minx, maxx))
+        ax0.set_ylim((miny, maxy))
+        ax1.set_box_aspect(1/ratio)
+        fig.set_tight_layout(True)
+
+        if not no_titles:
+            fig.suptitle('{} summary'.format(self.name))
         if show:
             plt.show()
         if save:
-            savepath = utils.add_version('../datasets/{n}/{n}_summary.png'.format(n=self.name))
+            savepath = kwargs.get('savepath', utils.add_version('../datasets/{n}/{n}_summary.png'.format(n=self.name), replace=replace))
             print('Saving to {}'.format(savepath))
-            utils.savefig(fig, savepath, replace=replace)
+            utils.savefig(fig, savepath, bbox_inches='tight')
         plt.close()
     
-    def plot_tof_vs_gps(self, save=True, replace=True, show=True):
+    def plot_tof_vs_gps(self, save=True, replace=True, show=True, **kwargs):
         fig, ax_grid = plt.subplots(3, len(self.hydrophones))
         ax_grid = ax_grid.reshape(3, len(self.hydrophones))
         for i, (name, data) in enumerate(self.hydrophones.items()):
@@ -527,12 +595,20 @@ class Dataset():
                 for ax in axs:
                     ax.set_xlabel('Time')
 
-        fig.suptitle('{} tof vs gps'.format(self.name))
+        if not kwargs.get('exclude_titles', False):
+            fig.suptitle('{} tof vs gps'.format(self.name))
         fig.subplots_adjust(wspace=0, hspace=0)
         if show:
             plt.show()
         if save:
-            savepath = utils.add_version('../datasets/{n}/{n}_tof_vs_gps.png'.format(n=self.name), replace=replace)
+            savepath = kwargs.get('savepath', utils.add_version('../datasets/{n}/{n}_tof_vs_gps.png'.format(n=self.name), replace=replace))
             print('Saving to {}'.format(savepath))
             utils.savefig(fig, savepath)
         plt.close()
+
+if __name__ == '__main__':
+    # dataset = Dataset('tag78_swimming_test_1_2')
+    # dataset = Dataset('tag78_shore_2_boat_all_static_test_0')
+    dataset = Dataset('tag78_50m_increment_long_beach_test_0')
+    dataset.plot(save=True, replace=True, exclude_titles=True, plot_total_seconds=True, savepath='../paper/fig6.png', ratio=7, width=7, legend_outside=False)
+    dataset.plot_tof_vs_gps(save=False)
