@@ -8,6 +8,7 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 import matplotlib.animation as animation
+plt.rcParams["font.family"] = "Times New Roman"
 import pandas as pd
 from dataset import Dataset
 from kalman import KalmanFilter
@@ -275,12 +276,26 @@ class ParticleFilter(Filter):
         self._particles[:, -1] = 1
 
     def plot(self, dataset, show=True, save=False, replace=False, **kwargs):
+        def ints():
+            i = 0
+            while True:
+                yield i
+                i += 1
+        
+        i = ints()
+        n = 1 + 2 * len(dataset.hydrophones)
+
+        # Get parameters
         padding = kwargs.get('padding', 1.1)
         no_titles = kwargs.get('exclude_titles', False)
         width = kwargs.get('width', 3.5)
+        ratio = kwargs.get('ratio', 5)
+        seconds = kwargs.get('plot_total_seconds', False)
 
         # Set up figure and axes
-        fig, ax = plt.subplots(figsize=(width, width))
+        arr = mpl.figure.figaspect((1+ratio)/ratio)
+        w, h = width * arr / arr[0]
+        fig, (ax0, ax1) = plt.subplots(2, 1, gridspec_kw={'height_ratios': [ratio, 1]}, figsize=(w, h))
 
         avg_particle = np.average(self._history, axis=1)  # Find the average particle at each time step
 
@@ -299,8 +314,8 @@ class ParticleFilter(Filter):
         all_y = all_y[~np.isnan(all_y)]
         (minx, miny), (maxx, maxy) = utils.pad_bounds(((np.min(all_x), np.min(all_y)), (np.max(all_x), np.max(all_y))), f=padding, square=True)
         bbox = (minx, miny, maxx, maxy)
-        ax.set_xlim((minx, maxx))
-        ax.set_ylim((miny, maxy))
+        ax0.set_xlim((minx, maxx))
+        ax0.set_ylim((miny, maxy))
 
         # Create background map
         origin = dataset.origin
@@ -311,40 +326,73 @@ class ParticleFilter(Filter):
             (south, west), (north, east) = coord_bounds
             img, ext = utils.bounds2img(west, south, east, north, zoom=17, map_dir='../maps/OpenStreetMap/Mapnik')
             true_ext = utils.to_cartesian(np.flip(np.array(ext).reshape(2, 2), axis=0), origin).T.flatten()
-        ax.imshow(img, extent=true_ext)
+        ax0.imshow(img, extent=true_ext)
 
         # Plot hydrophone paths
         for name, data in dataset.hydrophones.items():
             x, y = data.coords['x'], data.coords['y']
             dx, dy = np.concatenate([np.diff(x), [0]]), np.concatenate([np.diff(y), [0]])
             detection_x, detection_y = dataset.get_hydrophone_xy(name, data.detections.index).T
-            l, = ax.plot(x, y, marker='o', label='{} coords'.format(name))
-            ax.plot(detection_x, detection_y, marker='.', linestyle='None', label='{} detections'.format(name))
-            ax.quiver(x, y, dx, dy, units='xy', angles='xy', scale_units='xy', scale=1, color=l.get_color())
+            l, = ax0.plot(x, y, marker='o', label='{} coords'.format(name))
+            ax0.plot(detection_x, detection_y, marker='.', linestyle='None', label='{} detections'.format(name))
+            ax0.quiver(x, y, dx, dy, units='xy', angles='xy', scale_units='xy', scale=1, color=l.get_color())
+
+            # Add times
+            if seconds:
+                coords_times = utils.total_seconds(data.coords.index, data.coords.index[0])
+                detections_times = utils.total_seconds(data.detections.index, data.coords.index[0])
+            else:
+                coords_times = data.coords.index
+                detections_times = data.detections.index
+            ax1.scatter(coords_times, [n - next(i)]*len(data.coords))
+            ax1.scatter(detections_times, [n - next(i)]*len(data.detections))
 
         # Plot groundtruth path
         x, y = np.array(dataset.tag.coords[['x', 'y']]).T
         dx, dy = np.concatenate([np.diff(x), [0]]), np.concatenate([np.diff(y), [0]])
-        l, = ax.plot(x, y, marker='o', label='Tag coords')
-        ax.quiver(x, y, dx, dy, units='xy', angles='xy', scale_units='xy', scale=1, color=l.get_color())
+        l, = ax0.plot(x, y, marker='o', label='Tag coords')
+        ax0.quiver(x, y, dx, dy, units='xy', angles='xy', scale_units='xy', scale=1, color=l.get_color())
+        if seconds:
+            tag_times = utils.total_seconds(dataset.tag.coords.index, dataset.tag.coords.index[0])
+        else:
+            tag_times = dataset.tag.coords.index
+        if type(dataset.tag.raw) is np.ndarray:
+            ax1.plot(tag_times, [n - next(i)]*2, '-o', color=l.get_color())
+        else:
+            ax1.scatter(tag_times, [n - next(i)]*len(dataset.tag.coords))
 
         # Plot particle path
         x, y = avg_particle[:, [0, 1]].T
         dx, dy = np.concatenate([np.diff(x), [0]]), np.concatenate([np.diff(y), [0]])
-        l, = ax.plot(x, y, marker='.', label='Tag estimated coords', color='teal')
-        ax.quiver(x, y, dx, dy, units='xy', angles='xy', scale_units='xy', scale=1, color=l.get_color())
+        l, = ax0.plot(x, y, marker='.', label='Tag estimated coords', color='teal')
+        ax0.quiver(x, y, dx, dy, units='xy', angles='xy', scale_units='xy', scale=1, color=l.get_color())
 
         # Final prep
         num_entries = 2*len(dataset.hydrophones)+2
-        handles, labels = ax.get_legend_handles_labels()
+        handles, labels = ax0.get_legend_handles_labels()
         actual_entries = len(handles)
         handles = np.array(handles + [None]*(num_entries-actual_entries)).reshape(-1, 2).T.flatten()[:num_entries]
         labels = np.array(labels + [None]*(num_entries-actual_entries)).reshape(-1, 2).T.flatten()[:num_entries]
-        ax.legend(handles, labels, loc='upper right', ncol=2)
-        ax.set_xlabel('x (m)')
-        ax.set_ylabel('y (m)')
+        ax0.legend(handles, labels, loc='upper right', ncol=2)
+        ax0.set_xlabel('x (m)')
+        ax0.set_ylabel('y (m)')
         if not no_titles:
-            ax.set_title('Trajectories')
+            ax0.set_title('Trajectories')
+
+        ax0.set_title('a)', loc='left', fontsize='medium')
+        ax1.set_title('b)', loc='left', fontsize='medium')
+
+        if seconds:
+            ax1.set_xlabel('Time (s)')
+        else:
+            ax1.set_xlabel('Time')
+        ax1.set_ylabel('Series')
+        ax1.set_yticks([])
+        ax1.set_yticklabels([])
+
+        # Set axes and figure sizes
+        ax1.set_box_aspect(1/ratio)
+        fig.set_tight_layout(True)
 
         # Show and save the plot
         if show:
@@ -432,10 +480,15 @@ class ParticleFilter(Filter):
         ax0.scatter(correction_times, x_error_corr, marker='.')
         ax0.scatter(correction_times, y_error_corr, marker='.')
         ax0.scatter(correction_times, dist_corr, marker='.')
-        if kwargs.get('legend_outside', False):
-            ax0.legend(loc='center left', ncol=3, bbox_to_anchor=(1, 0.5))
+        if kwargs.get('error_values', False):
+            ncol = 3
         else:
-            ax0.legend(loc='upper right', ncol=3)
+            ncol = 1
+        if kwargs.get('legend_outside', False):
+            ax0.legend(loc='center left', ncol=ncol, bbox_to_anchor=(1, 0.5))
+        else:
+            ax0.legend(loc='upper right', ncol=ncol)
+        ax0.set_title('a)', loc='left', fontsize='medium')
 
         # Plot zooms
         if n > 0:
@@ -471,7 +524,7 @@ class ParticleFilter(Filter):
                 ax.imshow(img, extent=true_ext)
 
             # Fill zoom axes
-            for (time, ax) in zip(zoom_times, axs):
+            for i, (time, ax, label) in enumerate(zip(zoom_times, axs, 'bcdefghijklmnopqrstuvwxyz')):
 
                 if type(time) == int:
                     idx = time
@@ -483,14 +536,16 @@ class ParticleFilter(Filter):
                     time = times[idx]
                 
                 # Plot particles
-                ax.scatter(self._history[idx, :, 0], self._history[idx, :, 1], linestyle='None', marker='.', color='gold')
+                ax.scatter(self._history[idx, :, 0], self._history[idx, :, 1], linestyle='None', marker='.', color='gold', label='Particles')
 
                 # Plot hydrophone paths
                 for name, data in dataset.hydrophones.items():
+                    # Plot hydrophone coords
                     x, y = data.coords['x'][:timestamp], data.coords['y'][:timestamp]
-                    detection_x, detection_y = dataset.get_hydrophone_xy(name, data.detections[:timestamp].index).T
-                    ax.plot(x, y, marker='o', label='{} path'.format(name))
-                    ax.plot(detection_x, detection_y, marker='.', linestyle='None', label='{} detections'.format(name))
+                    if len(x) > 0 and len(y) > 0:
+                        x, y = x[-1], y[-1]
+                    ax.plot(x, y, marker='o', label='{} position'.format(name))
+                    ax.plot([], [])
 
                     # Draw circles showing the last measurement
                     pos = dataset.get_hydrophone_xy(name, timestamp, mode='last')
@@ -502,18 +557,21 @@ class ParticleFilter(Filter):
                         index=self._time_history[self._step_history == Filter.CORRECTION][self._hydrophone_history == name])
                     r = Dataset.get(r_series, timestamp, mode='last')[1]
                     r_std = Dataset.get(r_std_series, timestamp, mode='last')[1]
-                    if r is not None and pos is not None:
-                        ax.add_patch(mpl.patches.Circle(pos, r, fill=False, linewidth=1, zorder=0))
-                        ax.add_patch(mpl.patches.Circle(pos, r-r_std, fill=False, linewidth=1, color='gray', zorder=0))
-                        ax.add_patch(mpl.patches.Circle(pos, r+r_std, fill=False, linewidth=1, color='gray', zorder=0))
+                    if r is None or pos is None:
+                        pos = (0, 0)
+                        r = 0
+                        r_std = 0
+                    ax.add_patch(mpl.patches.Circle(pos, r, fill=False, linewidth=1, zorder=0))
+                    ax.add_patch(mpl.patches.Circle(pos, r-r_std, fill=False, linewidth=1, color='gray', zorder=0))
+                    ax.add_patch(mpl.patches.Circle(pos, r+r_std, fill=False, linewidth=1, color='gray', zorder=0))
 
                 # Plot groundtruth path
                 x, y = np.array(dataset.tag.coords[['x', 'y']][:timestamp]).T
-                ax.plot(x, y, marker='.', label='tag true path')
+                ax.plot(x, y, marker='.', label='Tag coords')
 
                 # Plot particle path
                 x, y = avg_particle[:idx, [0, 1]].T
-                ax.plot(x, y, marker='.', label='tag estimated path', color='teal')
+                ax.plot(x, y, marker='.', label='Tag estimated coords', color='teal')
 
                 # Add lines indicating where the zooms came from
                 ax0.axvline(time, ymin=0, ymax=1, color='gray', linewidth=0.5)
@@ -524,7 +582,13 @@ class ParticleFilter(Filter):
                 fig.add_artist(con_right)
 
                 # Set title to the timestamp
-                ax.set_title(str(time), fontsize=10)
+                ax.set_title(str(time), fontsize='medium')
+                ax.set_title('{})'.format(label), loc='left', fontsize='medium')
+
+                # Add legend to one zoom axis
+                if i == 0:
+                    handles, labels = ax.get_legend_handles_labels()
+                    fig.legend(handles, labels, loc='upper left', ncol=5, fontsize='small', bbox_to_anchor=(0, 0), bbox_transform=ax.transAxes)
 
         # Set and figure titles
         if seconds:
@@ -716,10 +780,8 @@ class ParticleFilter(Filter):
         plt.close()
 
 if __name__ == '__main__':
-    # dataset = Dataset('tag78_swimming_test_1_2', shift_tof=True)
-    # dataset = Dataset('tag78_shore_2_boat_all_static_test_1', shift_tof=True)
-    dataset = Dataset('tag78_shore_2_boat_all_static_test_0', shift_tof=True)
-    # dataset = Dataset('tag78_50m_increment_long_beach_test_0', reset_tof=True, shift_tof=True)
+    save = True
+    dataset = Dataset('tag78_swimming_test_1_2', shift_tof=True)
     pf = ParticleFilter.from_dataset(dataset, 1000, RandomMotionModel, motion_model_params={
                 'init_uniform_random': [(0, 200), (-150, 50)]
             }, save_history=True, hydrophone_params={
@@ -727,9 +789,24 @@ if __name__ == '__main__':
                 457049: {'m': -0.20985953, 'l': 5.5568182, 'b': 76.90064068, 'signal_var': 1000, 'ff': 0.1, 'initial_r': 0}
             }, use_tof=True, measurement_cov=np.array([[10, 0], [0, 10]]))
     pf.run()
-    pf.plot(dataset, show=True, save=True, exclude_titles=True, width=7, savepath='../paper/fig4.png')
-    # pf.plot_error(dataset, show=True, save=True, exclude_titles=True, plot_total_seconds=True, zoom_times=[0, 20, 200, -1], ratio=1, error_values=True, width=7, savepath='../paper/fig2.png')
-    pf.plot_error(dataset, show=True, save=True, exclude_titles=True, plot_total_seconds=True, zoom_times=[0, dataset.start_time + timedelta(seconds=44), dataset.start_time + timedelta(seconds=60.5), dataset.start_time + timedelta(seconds=400), -1], ratio=1, error_values=True, width=7, savepath='../paper/fig5.png')
+    pf.plot(dataset, show=True, save=save, exclude_titles=True, plot_total_seconds=True, width=6.5, savepath='../paper/fig0.png')
+    pf.plot_error(dataset, show=True, save=save, exclude_titles=True, plot_total_seconds=True, zoom_times=[0, 20, 200, -1], ratio=1, width=6.5, savepath='../paper/fig1.png')
+
+    dataset = Dataset('tag78_shore_2_boat_all_static_test_0', shift_tof=True)
+    pf = ParticleFilter.from_dataset(dataset, 1000, RandomMotionModel, motion_model_params={
+                'init_uniform_random': [(0, 200), (-150, 50)]
+            }, save_history=True, hydrophone_params={
+                'VR100': {'m': -0.10527966, 'l': -0.55164737, 'b': 68.59493072, 'signal_var': 1000, 'ff': 0.1, 'initial_r': 0},
+                457049: {'m': -0.20985953, 'l': 5.5568182, 'b': 76.90064068, 'signal_var': 1000, 'ff': 0.1, 'initial_r': 0}
+            }, use_tof=True, measurement_cov=np.array([[10, 0], [0, 10]]))
+    pf.run()
+    pf.plot(dataset, show=True, save=save, exclude_titles=True, plot_total_seconds=True, width=6.5, savepath='../paper/fig2.png')
+    pf.plot_error(dataset, show=True, save=save, exclude_titles=True, plot_total_seconds=True, zoom_times=[0, dataset.start_time + timedelta(seconds=44), dataset.start_time + timedelta(seconds=60.5), dataset.start_time + timedelta(seconds=400), -1], ratio=1, width=6.5, savepath='../paper/fig3.png')
+
+    # dataset = Dataset('tag78_shore_2_boat_all_static_test_1', shift_tof=True)
+    # dataset = Dataset('tag78_shore_2_boat_all_static_test_0', shift_tof=True)
+    # dataset = Dataset('tag78_50m_increment_long_beach_test_0', reset_tof=True, shift_tof=True)
+    # pf.plot_error(dataset, show=True, save=False, exclude_titles=True, plot_total_seconds=True, zoom_times=[0, dataset.start_time + timedelta(seconds=44), dataset.start_time + timedelta(seconds=60.5), dataset.start_time + timedelta(seconds=400), -1], ratio=1, error_values=True, width=7, savepath='../paper/fig5.png')
     # pf.plot_error(dataset, show=True, save=True, exclude_titles=True, plot_total_seconds=True, zoom_times=[0, dataset.start_time + timedelta(seconds=500), dataset.start_time + timedelta(seconds=1500), dataset.start_time + timedelta(seconds=3500), -1], ratio=1, error_values=True, width=7, savepath='../paper/fig8.png')
 
     # Old hydrophone params

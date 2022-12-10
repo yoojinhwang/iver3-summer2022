@@ -606,9 +606,100 @@ class Dataset():
             utils.savefig(fig, savepath)
         plt.close()
 
+    def plot_range_error(self, name, save=False, replace=True, show=True, **kwargs):
+        # Get parameters
+        no_titles = kwargs.get('exclude_titles', False)
+        width = kwargs.get('width', 3.5)
+        ratio = kwargs.get('ratio', 0.8)
+        seconds = kwargs.get('plot_total_seconds', False)
+
+        # Set up figure and axes
+        arr = mpl.figure.figaspect(ratio)
+        w, h = width * arr / arr[0]
+        fig, (ax0, ax1) = plt.subplots(2, 1, figsize=(w, h), sharex=True)
+
+        # Get data
+        data = self.hydrophones[name]
+        times = data.detections.index
+        if seconds:
+            x = utils.total_seconds(times, times[0])
+        else:
+            x = times
+
+        # Axis 0
+        # Plot gps distance
+        gps_distances = self.get_gps_distance(name, times)
+        l, = ax0.plot(x, gps_distances, marker=',', label='GPS distance')
+
+        # Plot tof distance
+        tof_distances = np.array(data.detections['total_distance'])
+        ax0.plot(x, tof_distances, label='TOF distance')
+
+        # Plot shifted tof distance
+        shifted_tof_distances = tof_distances + gps_distances[0] - tof_distances[0]
+        ax0.plot(x, shifted_tof_distances, label='Shifted TOF distance')
+
+        # Plot error adjusted tof distance
+        error_slope = ((gps_distances[-1]-tof_distances[-1]) - (gps_distances[0]-tof_distances[0])) / (times[-1]-times[0]).total_seconds()
+        error = lambda t: error_slope * utils.total_seconds(t, times[0]) + (gps_distances[0]-tof_distances[0])
+        adjusted_tof_distances = tof_distances + error(times)
+        ax0.plot(x, adjusted_tof_distances, label='Adjusted TOF distance')
+
+        # Add legend and title
+        ax0.scatter(x, gps_distances, marker='.')
+        if seconds:
+            ax0.scatter(utils.total_seconds(self.tag.coords.index, times[0]), self.get_gps_distance(name, self.tag.coords.index), marker='o', color=l.get_color())
+        else:
+            ax0.scatter(self.tag.coords.index, self.get_gps_distance(name, self.tag.coords.index), marker='o', color=l.get_color())
+        ax0.scatter(x, tof_distances, marker='.')
+        ax0.scatter(x, shifted_tof_distances, marker='.')
+        ax0.scatter(x, adjusted_tof_distances, marker='.')
+        ax0.legend()
+        if not no_titles:
+            ax0.set_title('Hydrophone {}'.format(name))
+        ax0.set_ylabel('Distance (m)')
+
+        # Axis 1
+        # Plot errors
+        n = len(times)
+        tof_distance_rms = np.sqrt(np.sum(np.square(gps_distances - tof_distances)) / n)
+        shifted_tof_distance_rms = np.sqrt(np.sum(np.square(gps_distances - shifted_tof_distances)) / n)
+        adjusted_tof_distance_rms = np.sqrt(np.sum(np.square(gps_distances - adjusted_tof_distances)) / n)
+        ax1.plot(x, [0]*len(times))
+        if kwargs.get('error_values', False):
+            ax1.plot(x, gps_distances - tof_distances, label='TOF error, RMS={:.2f}'.format(tof_distance_rms))
+            ax1.plot(x, gps_distances - shifted_tof_distances, label='Shifted TOF error, RMS={:.2f}'.format(shifted_tof_distance_rms))
+            ax1.plot(x, gps_distances - adjusted_tof_distances, label='Adjusted TOF error, RMS={:.2f}'.format(adjusted_tof_distance_rms))
+        else:
+            ax1.plot(x, gps_distances - tof_distances, label='TOF error'.format(tof_distance_rms))
+            ax1.plot(x, gps_distances - shifted_tof_distances, label='Shifted TOF error'.format(shifted_tof_distance_rms))
+            ax1.plot(x, gps_distances - adjusted_tof_distances, label='Adjusted TOF error'.format(adjusted_tof_distance_rms))
+        ax1.scatter(x, [0]*len(times), marker='.')
+        ax1.scatter(x, gps_distances - tof_distances, marker='.')
+        ax1.scatter(x, gps_distances - shifted_tof_distances, marker='.')
+        ax1.scatter(x, gps_distances - adjusted_tof_distances, marker='.')
+        ax1.legend()
+        ax1.set_ylabel('Error (m)')
+        if seconds:
+            ax1.set_xlabel('Time (s)')
+        else:
+            ax1.set_xlabel('Time')
+
+        if not no_titles:
+            fig.suptitle('{} tof vs gps'.format(self.name))
+        fig.subplots_adjust(wspace=0, hspace=0)
+        if show:
+            plt.show()
+        if save:
+            savepath = kwargs.get('savepath', utils.add_version('../datasets/{n}/{n}_tof_vs_gps.png'.format(n=self.name), replace=replace))
+            print('Saving to {}'.format(savepath))
+            utils.savefig(fig, savepath)
+        plt.close()
+
 if __name__ == '__main__':
     # dataset = Dataset('tag78_swimming_test_1_2')
     # dataset = Dataset('tag78_shore_2_boat_all_static_test_0')
-    dataset = Dataset('tag78_50m_increment_long_beach_test_0')
-    dataset.plot(save=True, replace=True, exclude_titles=True, plot_total_seconds=True, savepath='../paper/fig6.png', ratio=7, width=7, legend_outside=False)
-    dataset.plot_tof_vs_gps(save=False)
+    dataset = Dataset('tag78_50m_increment_long_beach_test_0', end_time=datetime.fromisoformat('2022-06-08 09:56'))
+    # dataset.plot(save=True, replace=True, exclude_titles=True, plot_total_seconds=True, savepath='../paper/fig6.png', ratio=7, width=7, legend_outside=False)
+    # dataset.plot_tof_vs_gps(save=False)
+    dataset.plot_range_error(457012, show=True, save=True, exclude_titles=True, width=10, plot_total_seconds=True, savepath='../paper/fig_stairs.png')
