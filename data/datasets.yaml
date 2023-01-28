@@ -181,6 +181,12 @@ tag78_shore_2_boat_all_static_test_1:
         latitude: 10.924123
         longitude: -85.7945185
 
+# Show an instance of two clusters of particles
+tag78_static_two_clusters:
+    from: tag78_shore_2_boat_all_static_test_1
+    start_time: '2022-07-18 14:20:45'
+    end_time: '2022-07-18 14:23:33'
+
 # Can be used with the Kalman and Particle filters
 tag78_shore_2_boat_all_static_test_0:
     type: 'two_hydrophones'
@@ -250,11 +256,16 @@ tag78_swimming_test_1_1:
 
 tag78_swimming_test_1_2:
     from: tag78_swimming_test_1_1
-    start_time: '2022-07-21 09:45:20'
+    start_time: '2022-07-21 09:45:26'
     end_time: '2022-07-21 09:51:15'
     # start_time: '2022-07-21 09:44'
     # end_time: '2022-07-21 09:52'
     # reset_tof: True
+
+tag78_swimming_test_1_3:
+    from: tag78_swimming_test_1
+    start_time: '2022-07-21 10:05:25'
+    end_time: '2022-07-21 10:07:40'
 
 new_sensor_test:
     type: 'single_hydrophone'

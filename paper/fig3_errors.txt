@@ -1,0 +1,13 @@
+\begin{tabular}{rccc}\toprule
+	Error (m) & Max/Min & Average & Standard Deviation \\ \midrule
+	\multicolumn{4}{c}{From 0 seconds} \\
+	x error & -96.79 & -11.08 & 21.11 \\
+	y error & 49.70 & -2.71 & 14.63 \\
+	distance & 108.79 & 16.25 & 22.92 \\
+	\midrule
+	\multicolumn{4}{c}{From 61 seconds} \\
+	x error & -9.78 & -5.42 & 3.63 \\
+	y error & -15.18 & -6.69 & 4.59 \\
+	distance & 15.30 & 10.00 & 2.91 \\
+	\bottomrule
+\end{tabular}

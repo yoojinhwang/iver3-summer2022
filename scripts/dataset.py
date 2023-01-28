@@ -36,9 +36,13 @@ class Dataset():
         self.name = name
         self.attrs = kwargs
         kwargs['from'] = name
+        encountered_names = set()
 
         while 'from' in self.attrs:
             from_name = self.attrs['from']
+            if from_name in encountered_names:
+                raise ValueError('Recursive definition: {} depends on itself'.format(name))
+            encountered_names.add(name)
             old_attrs = self.attrs
             self.attrs = datasets[from_name]
 
@@ -150,15 +154,19 @@ class Dataset():
                 index=[start_time, end_time])
         coords['x'], coords['y'] = utils.to_cartesian(np.array(coords).T, self.origin).T
 
-        # Find the start time and end time for the whole data frame
+        # Find the start time and end time for the whole dataset
         if start_time is None:
             for data in self.hydrophones.values():
                 if start_time is None or start_time > data.raw.index[0]:
                     start_time = data.raw.index[0]
+            if start_time is None or start_time > coords.index[0]:
+                start_time = coords.index[0]
         if end_time is None:
             for data in self.hydrophones.values():
                 if end_time is None or end_time < data.raw.index[-1]:
                     end_time = data.raw.index[-1]
+            if end_time is None or start_time < coords.index[-1]:
+                end_time = coords.index[-1]
 
         # Fill in tag data
         self.tag = TagData(raw, tag_id, utils.avg_dt_dict.get(tag_id, np.nan), coords)
@@ -410,8 +418,8 @@ class Dataset():
         for name, data in self.hydrophones.items():
             # Plot total seconds or timestamps
             if seconds:
-                coords_times = utils.total_seconds(data.coords.index, data.coords.index[0])
-                detections_times = utils.total_seconds(data.detections.index, data.coords.index[0])
+                coords_times = utils.total_seconds(data.coords.index, dataset.start_time)
+                detections_times = utils.total_seconds(data.detections.index, dataset.start_time)
             else:
                 coords_times = data.coords.index
                 detections_times = data.detections.index
@@ -438,7 +446,7 @@ class Dataset():
         l, = ax0.plot(x, y, marker='.', label='Tag coords')
         ax0.quiver(x, y, dx, dy, units='xy', angles='xy', scale_units='xy', scale=1, width=0.00001, color=l.get_color())
         if seconds:  # Plot total seconds or timestamps
-            tag_times = utils.total_seconds(self.tag.coords.index, self.tag.coords.index[0])
+            tag_times = utils.total_seconds(self.tag.coords.index, dataset.start_time)
         else:
             tag_times = self.tag.coords.index
         if type(self.tag.raw) is np.ndarray:
@@ -495,7 +503,9 @@ class Dataset():
         if show:
             plt.show()
         if save:
-            savepath = kwargs.get('savepath', utils.add_version('../datasets/{n}/{n}_summary.png'.format(n=self.name), replace=replace))
+            savepath = utils.add_version(
+                kwargs.get('savepath', '../datasets/{n}/{n}_summary.png'.format(n=self.name)),
+                replace=replace)
             print('Saving to {}'.format(savepath))
             utils.savefig(fig, savepath, bbox_inches='tight')
         plt.close()
@@ -601,7 +611,9 @@ class Dataset():
         if show:
             plt.show()
         if save:
-            savepath = kwargs.get('savepath', utils.add_version('../datasets/{n}/{n}_tof_vs_gps.png'.format(n=self.name), replace=replace))
+            savepath = utils.add_version(
+                kwargs.get('savepath', '../datasets/{n}/{n}_tof_vs_gps.png'.format(n=self.name)),
+                replace=replace)
             print('Saving to {}'.format(savepath))
             utils.savefig(fig, savepath)
         plt.close()
@@ -654,10 +666,11 @@ class Dataset():
         ax0.scatter(x, tof_distances, marker='.')
         ax0.scatter(x, shifted_tof_distances, marker='.')
         ax0.scatter(x, adjusted_tof_distances, marker='.')
-        ax0.legend()
+        ax0.legend(loc='upper right')
         if not no_titles:
             ax0.set_title('Hydrophone {}'.format(name))
         ax0.set_ylabel('Distance (m)')
+        ax0.set_title('a)', loc='left', fontsize='medium')
 
         # Axis 1
         # Plot errors
@@ -678,12 +691,13 @@ class Dataset():
         ax1.scatter(x, gps_distances - tof_distances, marker='.')
         ax1.scatter(x, gps_distances - shifted_tof_distances, marker='.')
         ax1.scatter(x, gps_distances - adjusted_tof_distances, marker='.')
-        ax1.legend()
+        ax1.legend(loc='upper right')
         ax1.set_ylabel('Error (m)')
         if seconds:
             ax1.set_xlabel('Time (s)')
         else:
             ax1.set_xlabel('Time')
+        ax1.set_title('b)', loc='left', fontsize='medium')
 
         if not no_titles:
             fig.suptitle('{} tof vs gps'.format(self.name))
@@ -691,15 +705,21 @@ class Dataset():
         if show:
             plt.show()
         if save:
-            savepath = kwargs.get('savepath', utils.add_version('../datasets/{n}/{n}_tof_vs_gps.png'.format(n=self.name), replace=replace))
+            savepath = utils.add_version(
+                kwargs.get('savepath', '../datasets/{n}/{n}_tof_vs_gps.png'.format(n=self.name)),
+                replace=replace)
             print('Saving to {}'.format(savepath))
             utils.savefig(fig, savepath)
         plt.close()
 
 if __name__ == '__main__':
-    # dataset = Dataset('tag78_swimming_test_1_2')
+    dataset = Dataset('tag78_static_two_clusters')
+    dataset.plot(save=True, replace=True, exclude_titles=True, plot_total_seconds=True, ratio=7, width=7, legend_outside=False)
+    dataset.plot_tof_vs_gps(save=True, replace=True)
+
     # dataset = Dataset('tag78_shore_2_boat_all_static_test_0')
-    dataset = Dataset('tag78_50m_increment_long_beach_test_0', end_time=datetime.fromisoformat('2022-06-08 09:56'))
+    # dataset = Dataset('tag78_50m_increment_long_beach_test_0', end_time=datetime.fromisoformat('2022-06-08 09:56'))
     # dataset.plot(save=True, replace=True, exclude_titles=True, plot_total_seconds=True, savepath='../paper/fig6.png', ratio=7, width=7, legend_outside=False)
     # dataset.plot_tof_vs_gps(save=False)
-    dataset.plot_range_error(457012, show=True, save=True, exclude_titles=True, width=10, plot_total_seconds=True, savepath='../paper/fig_stairs.png')
+
+    # dataset.plot_range_error(457049, show=True, save=False, exclude_titles=True, width=10, plot_total_seconds=True, savepath='../paper/fig_stairs.png')
