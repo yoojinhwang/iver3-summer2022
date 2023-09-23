@@ -670,7 +670,7 @@ class Dataset():
         if not no_titles:
             ax0.set_title('Hydrophone {}'.format(name))
         ax0.set_ylabel('Distance (m)')
-        ax0.set_title('a)', loc='left', fontsize='medium')
+        ax0.set_title('(a)', loc='left', fontsize='medium')
 
         # Axis 1
         # Plot errors
@@ -697,7 +697,7 @@ class Dataset():
             ax1.set_xlabel('Time (s)')
         else:
             ax1.set_xlabel('Time')
-        ax1.set_title('b)', loc='left', fontsize='medium')
+        ax1.set_title('(b)', loc='left', fontsize='medium')
 
         if not no_titles:
             fig.suptitle('{} tof vs gps'.format(self.name))

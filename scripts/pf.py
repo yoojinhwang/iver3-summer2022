@@ -292,6 +292,7 @@ class ParticleFilter(Filter):
         # Get parameters
         padding = kwargs.get('padding', 1.1)
         no_titles = kwargs.get('exclude_titles', False)
+        add_labels = kwargs.get('labels', False)
         width = kwargs.get('width', 3.5)
         ratio = kwargs.get('ratio', 5)
         seconds = kwargs.get('plot_total_seconds', False)
@@ -338,7 +339,8 @@ class ParticleFilter(Filter):
             dx, dy = np.concatenate([np.diff(x), [0]]), np.concatenate([np.diff(y), [0]])
             detection_x, detection_y = dataset.get_hydrophone_xy(name, data.detections.index).T
             l, = ax0.plot(x, y, marker='o', label='{} coords'.format(name))
-            ax0.plot(detection_x, detection_y, marker='.', linestyle='None', label='{} detections'.format(name))
+            # ax0.plot(detection_x, detection_y, marker='.', linestyle='None', label='{} detections'.format(name))
+            ax0.plot([], [], marker='o', linestyle='None', label='{} detections'.format(name))
             ax0.quiver(x, y, dx, dy, units='xy', angles='xy', scale_units='xy', scale=1, color=l.get_color())
 
             # Add times
@@ -383,8 +385,9 @@ class ParticleFilter(Filter):
         if not no_titles:
             ax0.set_title('Trajectories')
 
-        ax0.set_title('a)', loc='left', fontsize='medium')
-        ax1.set_title('b)', loc='left', fontsize='medium')
+        if add_labels:
+            ax0.set_title('(a)', loc='left', fontsize='medium')
+            ax1.set_title('(b)', loc='left', fontsize='medium')
 
         if seconds:
             ax1.set_xlabel('Time (s)')
@@ -409,6 +412,25 @@ class ParticleFilter(Filter):
             utils.savefig(fig, savepath, bbox_inches='tight')
         plt.close()
 
+    def plot_heading(self, dataset):
+        best_particle_idxs = np.argmax(self._history[:, :, -1], axis=1)
+        best_particle = np.array([self._history[i, idx] for i, idx in enumerate(best_particle_idxs)])
+        avg_particle = np.average(self._history, axis=1)
+        times = self._time_history
+        gps_heading = Dataset.get(dataset.tag.raw['gps_heading'], times)[1]
+
+        # Note about averaging angles: convert to unit vectors, average x and y, then convert back to angles
+        # Plot angles only after measurements. Use actual position to calculate angles
+
+        start_time = times[0]
+        times = utils.total_seconds(times, start_time)
+
+        plt.plot(times, gps_heading, label='gps heading')
+        plt.plot(times, best_particle[:, 2], label='best particle heading')
+        plt.plot(times, avg_particle[:, 2], label='avg particle heading')
+        plt.legend()
+        plt.show()
+
     def plot_error(self, dataset, show=True, save=False, replace=False, **kwargs):
         zoom_times = kwargs.get('zoom_times', [])
         n = len(zoom_times)
@@ -417,6 +439,7 @@ class ParticleFilter(Filter):
         seconds = kwargs.get('plot_total_seconds', False)
         padding = kwargs.get('padding', 1.1)
         no_titles = kwargs.get('exclude_titles', False)
+        add_labels = kwargs.get('labels', False)
         timeout = kwargs.get('timeout', 32)  # Number of seconds before the range stops being plotted
 
         # Set up figure and axes
@@ -495,7 +518,8 @@ class ParticleFilter(Filter):
             ax0.legend(loc='center left', ncol=ncol, bbox_to_anchor=(1, 0.5))
         else:
             ax0.legend(loc='upper right', ncol=ncol)
-        ax0.set_title('a)', loc='left', fontsize='medium')
+        if add_labels:
+            ax0.set_title('(a)', loc='left', fontsize='medium')
 
         # Plot zooms
         if n > 0:
@@ -590,7 +614,8 @@ class ParticleFilter(Filter):
 
                 # Set title to the timestamp
                 ax.set_title(str(time), fontsize='medium')
-                ax.set_title('{})'.format(label), loc='left', fontsize='medium')
+                if add_labels:
+                    ax.set_title('({})'.format(label), loc='left', fontsize='medium')
 
                 # Add legend to one zoom axis
                 if i == 0:
@@ -628,22 +653,18 @@ class ParticleFilter(Filter):
 
         # Tabular environment
         table_format =\
-            '\\begin{{tabular}}{{rccc}}\\toprule\n' +\
-            '\tError (m) & Max/Min & Average & Standard Deviation \\\\ \\midrule\n' +\
-            '{}\t\\bottomrule\n' +\
-            '\\end{{tabular}}'
+        '\\begin{{tabular}}{{rcccc}}\\toprule\n' +\
+        '    Time span & \multicolumn{{3}}{{c}}{{Distance (m)}} & RMSE (m) \\\\\n' +\
+        '    & Max & Average & Stdev & \\\\ \\midrule\n' +\
+        '{}' +\
+        '    \\bottomrule\n' +\
+        '\\end{{tabular}}'
 
-        # One inner table for each time
-        inner_table_format =\
-            '\t\\multicolumn{{4}}{{c}}{{From {seconds:.0f} seconds}} \\\\\n' +\
-            '\tx error & {:.2f} & {:.2f} & {:.2f} \\\\\n' +\
-            '\ty error & {:.2f} & {:.2f} & {:.2f} \\\\\n' +\
-            '\tdistance & {:.2f} & {:.2f} & {:.2f} \\\\\n'
-
-        separator = '\t\\midrule\n'
+        # One row for each time
+        row_format = '    {seconds:.0f}s to end & {:.2f} & {:.2f} & {:.2f} & {:.2f} \\\\\n'
 
         # Calculate for each time
-        inner_tables = []
+        rows = []
         for time in times:
             if type(time) == int:
                 idx = time
@@ -652,13 +673,12 @@ class ParticleFilter(Filter):
             x_error_t = x_error[idx:]
             y_error_t = y_error[idx:]
             dist_t = dist[idx:]
-            x_data = [max(np.max(x_error_t), np.min(x_error_t), key=np.abs), np.average(x_error_t), np.std(x_error_t)]
-            y_data = [max(np.max(y_error_t), np.min(y_error_t), key=np.abs), np.average(y_error_t), np.std(y_error_t)]
-            dist_data = [np.max(dist_t), np.average(dist_t), np.std(dist_t)]
+            rmse_t = np.sqrt(np.average(np.square(x_error_t) + np.square(y_error_t)))
+            row_data = [np.max(dist_t), np.average(dist_t), np.std(dist_t), rmse_t]
             seconds = (self._time_history[idx] - self._time_history[0]).total_seconds()
-            inner_tables.append(inner_table_format.format(*x_data, *y_data, *dist_data, seconds=seconds))
-        inner_tables = separator.join(inner_tables)
-        table = table_format.format(inner_tables)
+            rows.append(row_format.format(*row_data, seconds=seconds))
+        rows = ''.join(rows)
+        table = table_format.format(rows)
 
         # Display table
         print(table)
@@ -845,8 +865,8 @@ class ParticleFilter(Filter):
         plt.close()
 
 if __name__ == '__main__':
-    save = True
-    replace = True
+    save = False
+    replace = False
 
     # dataset = Dataset('tag78_static_two_clusters', shift_tof=True)
     # pf = ParticleFilter.from_dataset(dataset, 1000, RandomMotionModel, motion_model_params={
@@ -862,7 +882,7 @@ if __name__ == '__main__':
 
     dataset = Dataset('tag78_swimming_test_1_2', shift_tof=True)
     pf = ParticleFilter.from_dataset(dataset, 1000, RandomMotionModel, motion_model_params={
-                'init_uniform_random': [(0, 200), (-150, 50)]
+                'init_uniform_random': [(0, 200), (-150, 50), (-np.pi, np.pi)]
             }, save_history=True, hydrophone_params={
                 'VR100': {'m': -0.10527966, 'l': -0.55164737, 'b': 68.59493072, 'signal_var': 1000, 'ff': 0.1, 'initial_r': 0},
                 457049: {'m': -0.20985953, 'l': 5.5568182, 'b': 76.90064068, 'signal_var': 1000, 'ff': 0.1, 'initial_r': 0}
@@ -871,10 +891,11 @@ if __name__ == '__main__':
     pf.plot(dataset, show=True, save=save, replace=replace, exclude_titles=True, plot_total_seconds=True, width=6.5, savepath='../paper/fig0.png')
     pf.plot_error(dataset, show=True, save=save, replace=replace, exclude_titles=True, plot_total_seconds=True, zoom_times=[0, 20, dataset.start_time + timedelta(seconds=41), 200, -6], ratio=1, width=6.5, savepath='../paper/fig1.png')
     pf.tabulate_error(dataset, save=save, replace=replace, times=[0, dataset.start_time + timedelta(seconds=30)], savepath='../paper/fig1_errors.txt')
+    pf.plot_heading(dataset)
 
     # dataset = Dataset('tag78_shore_2_boat_all_static_test_0', shift_tof=True)
     # pf = ParticleFilter.from_dataset(dataset, 1000, RandomMotionModel, motion_model_params={
-    #             'init_uniform_random': [(0, 200), (-150, 50)]
+    #             'init_uniform_random': [(0, 200), (-150, 50), (-np.pi, np.pi)]
     #         }, save_history=True, hydrophone_params={
     #             'VR100': {'m': -0.10527966, 'l': -0.55164737, 'b': 68.59493072, 'signal_var': 1000, 'ff': 0.1, 'initial_r': 0},
     #             457049: {'m': -0.20985953, 'l': 5.5568182, 'b': 76.90064068, 'signal_var': 1000, 'ff': 0.1, 'initial_r': 0}

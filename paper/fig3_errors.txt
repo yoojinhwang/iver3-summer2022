@@ -1,13 +1,7 @@
-\begin{tabular}{rccc}\toprule
-	Error (m) & Max/Min & Average & Standard Deviation \\ \midrule
-	\multicolumn{4}{c}{From 0 seconds} \\
-	x error & -96.79 & -11.08 & 21.11 \\
-	y error & 49.70 & -2.71 & 14.63 \\
-	distance & 108.79 & 16.25 & 22.92 \\
-	\midrule
-	\multicolumn{4}{c}{From 61 seconds} \\
-	x error & -9.78 & -5.42 & 3.63 \\
-	y error & -15.18 & -6.69 & 4.59 \\
-	distance & 15.30 & 10.00 & 2.91 \\
-	\bottomrule
+\begin{tabular}{rcccc}\toprule
+    Time span & \multicolumn{3}{c}{Distance (m)} & RMSE (m) \\
+    & Max & Average & Stdev & \\ \midrule
+    0s to end & 110.19 & 16.27 & 23.69 & 28.74 \\
+    61s to end & 15.16 & 9.72 & 2.82 & 10.12 \\
+    \bottomrule
 \end{tabular}

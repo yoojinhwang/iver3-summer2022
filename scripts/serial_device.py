@@ -110,7 +110,7 @@ class SerialDevice(EventDispatcher):
             messages, >2 = defined by subclasses. In general, at higher
             verbosity levels the device will print everything it would have
             printed at lower levels and more.
-        events : list
+        event_types : list
             A list of event names to register in addition to the default ones.
         '''
         super().__init__([

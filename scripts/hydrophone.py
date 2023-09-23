@@ -168,7 +168,7 @@ class Hydrophone(SerialDevice):
             The port the hydrophone is on.
         verbosity : int
             Controls how much the hydrophone prints. 0 = nothing, 1 = some
-            status messages, >2 = everything else.
+            status messages, 2 or greater = everything else.
         '''
         # TODO: Add keyword arguments for each of the hydrophone's timeouts
         self._serial_no = serial_no
