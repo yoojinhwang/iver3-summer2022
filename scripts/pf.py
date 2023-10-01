@@ -413,23 +413,49 @@ class ParticleFilter(Filter):
         plt.close()
 
     def plot_heading(self, dataset):
-        best_particle_idxs = np.argmax(self._history[:, :, -1], axis=1)
-        best_particle = np.array([self._history[i, idx] for i, idx in enumerate(best_particle_idxs)])
-        avg_particle = np.average(self._history, axis=1)
+        resample_mask = np.concatenate([np.diff(pf._step_history), [0]]) == -1
+        resample_steps = pf._history[resample_mask]
+        best_particle_idxs = np.argmax(resample_steps[:, :, -1], axis=1)
+        best_particle = np.array([resample_steps[i, idx] for i, idx in enumerate(best_particle_idxs)])
         times = self._time_history
         gps_heading = Dataset.get(dataset.tag.raw['gps_heading'], times)[1]
+        gps_x, gps_y = dataset.get_tag_xy(times).T
 
         # Note about averaging angles: convert to unit vectors, average x and y, then convert back to angles
         # Plot angles only after measurements. Use actual position to calculate angles
+        unit_vecs = utils.unit_2d(resample_steps[:, :, 2])
+        avg_x = np.average(unit_vecs[:, :, 0], axis=1)
+        avg_y = np.average(unit_vecs[:, :, 1], axis=1)
+        avg_thetas = np.arctan2(avg_y, avg_x)
+        avg_particles = np.average(resample_steps, axis=1)
+        avg_x = avg_particles[:, 0]
+        avg_y = avg_particles[:, 1]
+        # dx = np.concatenate([[0], np.diff(avg_particles[:, 0])])
+        # dy = np.concatenate([[0], np.diff(avg_particles[:, 1])])
+        # avg_thetas = np.arctan2(dy, dx)
 
         start_time = times[0]
         times = utils.total_seconds(times, start_time)
+        resample_times = times[resample_mask]
 
-        plt.plot(times, gps_heading, label='gps heading')
-        plt.plot(times, best_particle[:, 2], label='best particle heading')
-        plt.plot(times, avg_particle[:, 2], label='avg particle heading')
-        plt.legend()
-        plt.show()
+        fig, axs = plt.subplots(3, 1, sharex=True)
+        axs[0].plot(times, gps_heading, label='gps heading')
+        # plt.plot(resample_times, best_particle[:, 2], label='best particle heading', marker='.')
+        axs[0].plot(resample_times, avg_thetas, label='avg heading', marker='.')
+        axs[0].set_ylabel('Heading (rad)')
+        axs[0].legend()
+        axs[1].plot(times, gps_x, label='gps x')
+        axs[1].plot(resample_times, avg_x, label='avg x', marker='.')
+        axs[1].set_ylabel('x Pos (m)')
+        axs[1].legend()
+        axs[2].plot(times, gps_y, label='gps y')
+        axs[2].plot(resample_times, avg_y, label='avg y', marker='.')
+        axs[2].set_ylabel('y Pos (m)')
+        axs[2].set_xlabel('Time (s)')
+        axs[2].legend()
+        fig.subplots_adjust(hspace=0)
+        fig.show()
+        
 
     def plot_error(self, dataset, show=True, save=False, replace=False, **kwargs):
         zoom_times = kwargs.get('zoom_times', [])

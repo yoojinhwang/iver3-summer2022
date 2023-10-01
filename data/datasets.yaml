@@ -267,6 +267,10 @@ tag78_swimming_test_1_3:
     start_time: '2022-07-21 10:05:25'
     end_time: '2022-07-21 10:07:40'
 
+tag78_swimming_test_1_4:
+    from: tag78_swimming_test_1_2
+    dropout: 0.1
+
 new_sensor_test:
     type: 'single_hydrophone'
     description:
@@ -285,3 +289,4 @@ new_sensor_test:
     origin:
         latitude: 33.7443502
         longitude: -118.1303359
+    

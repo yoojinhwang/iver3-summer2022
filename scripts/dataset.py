@@ -713,9 +713,13 @@ class Dataset():
         plt.close()
 
 if __name__ == '__main__':
-    dataset = Dataset('tag78_static_two_clusters')
-    dataset.plot(save=True, replace=True, exclude_titles=True, plot_total_seconds=True, ratio=7, width=7, legend_outside=False)
-    dataset.plot_tof_vs_gps(save=True, replace=True)
+    # dataset = Dataset('tag78_static_two_clusters')
+    # dataset.plot(save=True, replace=True, exclude_titles=True, plot_total_seconds=True, ratio=7, width=7, legend_outside=False)
+    # dataset.plot_tof_vs_gps(save=True, replace=True)
+
+    dataset = Dataset('tag78_swimming_test_1_4')
+    dataset.plot(exclude_titles=True, plot_total_seconds=True, ratio=7, width=7, legend_outside=False)
+    dataset.plot_tof_vs_gps()
 
     # dataset = Dataset('tag78_shore_2_boat_all_static_test_0')
     # dataset = Dataset('tag78_50m_increment_long_beach_test_0', end_time=datetime.fromisoformat('2022-06-08 09:56'))
